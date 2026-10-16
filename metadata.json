@@ -1,0 +1,6 @@
+{
+  "name": "Daily Sadhana",
+  "description": "Track daily sleep, multiple book reading sessions, Prabhupada lectures, consolidated analytics and averages, and exportable reports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
