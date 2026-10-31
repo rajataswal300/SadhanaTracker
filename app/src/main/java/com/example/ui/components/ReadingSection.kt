@@ -42,7 +42,8 @@ fun ReadingSection(
     activeReadingSession: ActivitySession?,
     onStartReading: () -> Unit,
     onStopReading: (Long) -> Unit,
-    onDeleteSession: (Long) -> Unit
+    onDeleteSession: (Long) -> Unit,
+    isCurrentDay: Boolean = true
 ) {
     val readingSessions = sessions.filter { it.activityType == "READING" }
     val totalReadingMinutes = readingSessions.sumOf { it.durationMinutes }
@@ -148,7 +149,8 @@ fun ReadingSection(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary
                     ),
-                    shape = RoundedCornerShape(14.dp)
+                    shape = RoundedCornerShape(14.dp),
+                    enabled = isCurrentDay
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(6.dp))
@@ -156,6 +158,16 @@ fun ReadingSection(
                         text = "Start Reading Session",
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp
+                    )
+                }
+
+                if (!isCurrentDay) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Reading session tracking is enabled on Today's date",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.sp
                     )
                 }
             }

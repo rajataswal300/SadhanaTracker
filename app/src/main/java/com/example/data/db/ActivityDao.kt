@@ -6,6 +6,8 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.example.data.model.ActivitySession
+import com.example.data.model.ChecklistItem
+import com.example.data.model.DailyChecklistCompletion
 import com.example.data.model.DailySummary
 import kotlinx.coroutines.flow.Flow
 
@@ -52,4 +54,33 @@ interface ActivityDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertDailySummary(summary: DailySummary)
+
+    // Checklist Items
+    @Query("SELECT * FROM checklist_items ORDER BY id ASC")
+    fun getAllChecklistItems(): Flow<List<ChecklistItem>>
+
+    @Query("SELECT COUNT(*) FROM checklist_items")
+    suspend fun getChecklistItemsCount(): Int
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertChecklistItem(item: ChecklistItem): Long
+
+    @Query("DELETE FROM checklist_items WHERE id = :itemId")
+    suspend fun deleteChecklistItem(itemId: Long)
+
+    @Query("DELETE FROM checklist_items WHERE title = :title")
+    suspend fun deleteChecklistItemByTitle(title: String)
+
+    // Checklist Completions per Date
+    @Query("SELECT * FROM daily_checklist_completions WHERE dateKey = :dateKey")
+    fun getChecklistCompletionsForDate(dateKey: String): Flow<List<DailyChecklistCompletion>>
+
+    @Query("SELECT * FROM daily_checklist_completions")
+    fun getAllChecklistCompletions(): Flow<List<DailyChecklistCompletion>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertChecklistCompletion(completion: DailyChecklistCompletion)
+
+    @Query("DELETE FROM daily_checklist_completions WHERE itemId = :itemId")
+    suspend fun deleteCompletionsForItem(itemId: Long)
 }

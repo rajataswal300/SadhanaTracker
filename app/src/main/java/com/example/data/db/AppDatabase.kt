@@ -5,11 +5,18 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.example.data.model.ActivitySession
+import com.example.data.model.ChecklistItem
+import com.example.data.model.DailyChecklistCompletion
 import com.example.data.model.DailySummary
 
 @Database(
-    entities = [ActivitySession::class, DailySummary::class],
-    version = 1,
+    entities = [
+        ActivitySession::class,
+        DailySummary::class,
+        ChecklistItem::class,
+        DailyChecklistCompletion::class
+    ],
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -25,7 +32,9 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "sadhana_tracker.db"
-                ).build()
+                )
+                    .fallbackToDestructiveMigration()
+                    .build()
                 INSTANCE = instance
                 instance
             }

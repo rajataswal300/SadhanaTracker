@@ -4,6 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.ActivitySession
+import com.example.data.model.ChecklistEntry
+import com.example.data.model.ChecklistItem
+import com.example.data.model.DailyChecklistCompletion
 import com.example.data.model.DailySummary
 import com.example.data.repository.TrackerRepository
 import kotlinx.coroutines.delay
@@ -32,7 +35,8 @@ data class DayReportItem(
     val displayLabel: String,
     val sleepMinutes: Long,
     val readingMinutes: Long,
-    val lectureWatched: Boolean
+    val lectureWatched: Boolean,
+    val strongMayaAttack: Boolean = false
 )
 
 data class ConsolidatedReport(
@@ -42,6 +46,7 @@ data class ConsolidatedReport(
     val averageReadingMinutes: Double,
     val totalReadingMinutes: Long,
     val lectureWatchedDays: Int,
+    val mayaAttackDays: Int = 0,
     val totalDays: Int,
     val consistencyPercentage: Int,
     val dailyItems: List<DayReportItem>
@@ -63,6 +68,11 @@ class DailyTrackerViewModel(private val repository: TrackerRepository) : ViewMod
     val currentTickerTimeMillis: StateFlow<Long> = _currentTickerTimeMillis.asStateFlow()
 
     init {
+        // Seed initial checklist items (Chanting) if database is empty
+        viewModelScope.launch {
+            repository.seedDefaultChecklistItemsIfEmpty()
+        }
+
         // Ticker coroutine updating current time every second for live timer display
         viewModelScope.launch {
             while (isActive) {
@@ -89,6 +99,32 @@ class DailyTrackerViewModel(private val repository: TrackerRepository) : ViewMod
     val allSummaries: StateFlow<List<DailySummary>> = repository.observeAllSummaries()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Checklist streams
+    val allChecklistItems: StateFlow<List<ChecklistItem>> = repository.observeChecklistItems()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val currentDayChecklistCompletions: StateFlow<List<DailyChecklistCompletion>> = _selectedDateKey
+        .flatMapLatest { dateKey -> repository.observeChecklistCompletionsForDate(dateKey) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allChecklistCompletions: StateFlow<List<DailyChecklistCompletion>> = repository.observeAllChecklistCompletions()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Combines master checklist items with completions for the currently selected dateKey.
+    // Unchecked items are automatically cleared for each new day!
+    val currentDayChecklistEntries: StateFlow<List<ChecklistEntry>> = combine(
+        allChecklistItems,
+        currentDayChecklistCompletions
+    ) { items, completions ->
+        val completedMap = completions.associate { it.itemId to it.isCompleted }
+        items.map { item ->
+            ChecklistEntry(
+                item = item,
+                isCompleted = completedMap[item.id] == true
+            )
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Consolidated report calculation derived from all records & selected period
     val consolidatedReport: StateFlow<ConsolidatedReport> = combine(
         _selectedPeriod,
@@ -99,7 +135,7 @@ class DailyTrackerViewModel(private val repository: TrackerRepository) : ViewMod
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
-        ConsolidatedReport(PeriodFilter.THIS_WEEK, 0.0, 0, 0.0, 0, 0, 0, 0, emptyList())
+        ConsolidatedReport(PeriodFilter.THIS_WEEK, 0.0, 0, 0.0, 0, 0, 0, 0, 0, emptyList())
     )
 
     fun setSelectedDate(dateKey: String) {
@@ -111,15 +147,25 @@ class DailyTrackerViewModel(private val repository: TrackerRepository) : ViewMod
     }
 
     fun navigateDate(daysDelta: Int) {
+        val todayStr = dateFormat.format(Date())
+        if (daysDelta > 0 && _selectedDateKey.value >= todayStr) {
+            _selectedDateKey.value = todayStr
+            return
+        }
         try {
             val date = dateFormat.parse(_selectedDateKey.value) ?: Date()
             val cal = Calendar.getInstance().apply {
                 time = date
                 add(Calendar.DAY_OF_YEAR, daysDelta)
             }
-            _selectedDateKey.value = dateFormat.format(cal.time)
+            val newDateStr = dateFormat.format(cal.time)
+            if (daysDelta > 0 && newDateStr > todayStr) {
+                _selectedDateKey.value = todayStr
+            } else {
+                _selectedDateKey.value = newDateStr
+            }
         } catch (_: Exception) {
-            _selectedDateKey.value = dateFormat.format(Date())
+            _selectedDateKey.value = todayStr
         }
     }
 
@@ -165,6 +211,12 @@ class DailyTrackerViewModel(private val repository: TrackerRepository) : ViewMod
         }
     }
 
+    fun toggleMayaAttack(attacked: Boolean) {
+        viewModelScope.launch {
+            repository.setMayaAttack(_selectedDateKey.value, attacked)
+        }
+    }
+
     fun updateBedAndWakeTimes(bedTime: String?, wakeTime: String?) {
         viewModelScope.launch {
             repository.updateTimes(_selectedDateKey.value, bedTime, wakeTime)
@@ -174,6 +226,25 @@ class DailyTrackerViewModel(private val repository: TrackerRepository) : ViewMod
     fun deleteSession(sessionId: Long) {
         viewModelScope.launch {
             repository.deleteSession(sessionId)
+        }
+    }
+
+    // Checklist Operations
+    fun addChecklistItem(title: String) {
+        viewModelScope.launch {
+            repository.addChecklistItem(title)
+        }
+    }
+
+    fun deleteChecklistItem(itemId: Long) {
+        viewModelScope.launch {
+            repository.deleteChecklistItem(itemId)
+        }
+    }
+
+    fun toggleChecklistItem(itemId: Long, isCompleted: Boolean) {
+        viewModelScope.launch {
+            repository.setChecklistCompletion(_selectedDateKey.value, itemId, isCompleted)
         }
     }
 
@@ -193,7 +264,6 @@ class DailyTrackerViewModel(private val repository: TrackerRepository) : ViewMod
                 startDateCal.set(Calendar.DAY_OF_MONTH, 1) // First day of current month
             }
             PeriodFilter.ALL_TIME -> {
-                // Find earliest session or summary or 30 days ago
                 val allDates = (sessions.map { it.dateKey } + summaries.map { it.dateKey }).sorted()
                 if (allDates.isNotEmpty()) {
                     try {
@@ -206,10 +276,6 @@ class DailyTrackerViewModel(private val repository: TrackerRepository) : ViewMod
             }
         }
 
-        val startDateStr = dateFormat.format(startDateCal.time)
-        val todayStr = dateFormat.format(today.time)
-
-        // Generate all dates in this range
         val dateList = mutableListOf<String>()
         val iterateCal = startDateCal.clone() as Calendar
         while (!iterateCal.after(today)) {
@@ -227,6 +293,7 @@ class DailyTrackerViewModel(private val repository: TrackerRepository) : ViewMod
             val readMins = daySessions.filter { it.activityType == "READING" }
                 .sumOf { it.durationMinutes }
             val lecture = summariesByDate[dateStr]?.prabhupadaLectureWatched ?: false
+            val maya = summariesByDate[dateStr]?.strongMayaAttack ?: false
 
             val shortLabel = try {
                 val d = dateFormat.parse(dateStr)
@@ -240,7 +307,8 @@ class DailyTrackerViewModel(private val repository: TrackerRepository) : ViewMod
                 displayLabel = shortLabel,
                 sleepMinutes = sleepMins,
                 readingMinutes = readMins,
-                lectureWatched = lecture
+                lectureWatched = lecture,
+                strongMayaAttack = maya
             )
         }
 
@@ -248,6 +316,7 @@ class DailyTrackerViewModel(private val repository: TrackerRepository) : ViewMod
         val totalReadMins = dailyItems.sumOf { it.readingMinutes }
         val daysCount = dailyItems.size.coerceAtLeast(1)
         val lectureDays = dailyItems.count { it.lectureWatched }
+        val mayaDays = dailyItems.count { it.strongMayaAttack }
 
         val avgSleep = totalSleepMins.toDouble() / daysCount
         val avgRead = totalReadMins.toDouble() / daysCount
@@ -260,6 +329,7 @@ class DailyTrackerViewModel(private val repository: TrackerRepository) : ViewMod
             averageReadingMinutes = avgRead,
             totalReadingMinutes = totalReadMins,
             lectureWatchedDays = lectureDays,
+            mayaAttackDays = mayaDays,
             totalDays = daysCount,
             consistencyPercentage = consistency,
             dailyItems = dailyItems
@@ -272,6 +342,7 @@ class DailyTrackerViewModel(private val repository: TrackerRepository) : ViewMod
     ): String {
         val sessions = currentDaySessions.value
         val summary = currentDaySummary.value
+        val checklist = currentDayChecklistEntries.value
 
         val sleepSessions = sessions.filter { it.activityType == "SLEEP" }
         val readingSessions = sessions.filter { it.activityType == "READING" }
@@ -286,6 +357,7 @@ class DailyTrackerViewModel(private val repository: TrackerRepository) : ViewMod
         val readRemainMins = totalReadMins % 60
 
         val lectureStatus = if (summary?.prabhupadaLectureWatched == true) "✅ Completed" else "❌ Not yet"
+        val mayaStatus = if (summary?.strongMayaAttack == true) "⚠️ Yes (Faced strong attack)" else "🛡️ No"
         val wake = summary?.wakeUpTime ?: "Logged via sessions"
         val bed = summary?.bedTimePreviousNight ?: "Logged via sessions"
 
@@ -305,6 +377,18 @@ class DailyTrackerViewModel(private val repository: TrackerRepository) : ViewMod
             }
             appendLine("📖 Book Reading: ${readHours}h ${readRemainMins}m (${readingSessions.size} sessions)")
             appendLine("🎧 Prabhupada Lecture: $lectureStatus")
+            appendLine("⚔️ Strong Maya Attack: $mayaStatus")
+
+            if (checklist.isNotEmpty()) {
+                val completedCount = checklist.count { it.isCompleted }
+                appendLine("━━━━━━━━━━━━━━━━━━━━━━━━━")
+                appendLine("📋 Daily Checklist: $completedCount/${checklist.size} completed")
+                checklist.forEach { entry ->
+                    val statusMark = if (entry.isCompleted) "✅" else "⬜"
+                    appendLine("   $statusMark ${entry.item.title}")
+                }
+            }
+
             appendLine("━━━━━━━━━━━━━━━━━━━━━━━━━")
             appendLine("✨ Logged with Daily Sadhana Tracker")
         }
@@ -336,6 +420,7 @@ class DailyTrackerViewModel(private val repository: TrackerRepository) : ViewMod
             appendLine("📖 Reading Average: ${avgReadHours}h ${avgReadRemainMins}m / day")
             appendLine("   • Total Reading: ${totalReadHours}h ${totalReadRemainMins}m")
             appendLine("🎧 Lecture Consistency: ${report.lectureWatchedDays}/${report.totalDays} days (${report.consistencyPercentage}%)")
+            appendLine("⚔️ Maya Attack Days: ${report.mayaAttackDays}/${report.totalDays} days")
             appendLine("━━━━━━━━━━━━━━━━━━━━━━━━━")
             appendLine("✨ Keep up the steady sadhana! Daily Sadhana Tracker")
         }

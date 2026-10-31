@@ -42,9 +42,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.ActivitySession
+import com.example.data.model.ChecklistEntry
 import com.example.data.model.DailySummary
 import com.example.ui.components.ActiveSessionBanner
+import com.example.ui.components.ChecklistSection
 import com.example.ui.components.LectureSection
+import com.example.ui.components.MayaAttackSection
+import com.example.ui.components.PastDaySummaryView
 import com.example.ui.components.ReadingSection
 import com.example.ui.components.ShareReportDialog
 import com.example.ui.components.SleepSection
@@ -57,7 +61,8 @@ fun DailyTrackerScreen(
     currentTickerTime: Long,
     sessions: List<ActivitySession>,
     activeSessions: List<ActivitySession>,
-    dailySummary: DailySummary?
+    dailySummary: DailySummary?,
+    checklistEntries: List<ChecklistEntry>
 ) {
     var showShareDialog by remember { mutableStateOf(false) }
 
@@ -126,115 +131,162 @@ fun DailyTrackerScreen(
                         onClick = { viewModel.navigateDate(1) },
                         modifier = Modifier
                             .size(40.dp)
-                            .testTag("next_date_button")
+                            .testTag("next_date_button"),
+                        enabled = !isToday
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Next Day")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Next Day",
+                            tint = if (!isToday) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                        )
                     }
                 }
             }
         }
 
-        // Active Session Pulsing Live Banner
-        if (activeSessions.isNotEmpty()) {
+        if (isToday) {
+            // Active Session Pulsing Live Banner
+            if (activeSessions.isNotEmpty()) {
+                item {
+                    ActiveSessionBanner(
+                        activeSessions = activeSessions,
+                        currentTickerTime = currentTickerTime,
+                        onStopSession = { sessionId -> viewModel.stopSession(sessionId) }
+                    )
+                }
+            }
+
+            // Daily Routine Checklist Section (Resets fresh every day)
             item {
-                ActiveSessionBanner(
-                    activeSessions = activeSessions,
-                    currentTickerTime = currentTickerTime,
-                    onStopSession = { sessionId -> viewModel.stopSession(sessionId) }
+                ChecklistSection(
+                    checklistEntries = checklistEntries,
+                    onToggleItem = { itemId, isCompleted -> viewModel.toggleChecklistItem(itemId, isCompleted) },
+                    onAddItem = { title -> viewModel.addChecklistItem(title) },
+                    onDeleteItem = { itemId -> viewModel.deleteChecklistItem(itemId) },
+                    isCurrentDay = true
                 )
             }
-        }
 
-        // Sleep & Rest Section
-        item {
-            SleepSection(
-                sessions = sessions,
-                dailySummary = dailySummary,
-                activeSleepSession = activeSleepSession,
-                onStartSleep = { isNight -> viewModel.startSleepSession(isNight) },
-                onWakeUp = { id -> viewModel.stopSession(id) },
-                onUpdateTimes = { bed, wake -> viewModel.updateBedAndWakeTimes(bed, wake) },
-                onDeleteSession = { id -> viewModel.deleteSession(id) }
-            )
-        }
-
-        // Book Reading Section
-        item {
-            ReadingSection(
-                sessions = sessions,
-                activeReadingSession = activeReadingSession,
-                onStartReading = { viewModel.startReadingSession() },
-                onStopReading = { id -> viewModel.stopSession(id) },
-                onDeleteSession = { id -> viewModel.deleteSession(id) }
-            )
-        }
-
-        // Prabhupada Lecture Section
-        item {
-            LectureSection(
-                lectureWatched = dailySummary?.prabhupadaLectureWatched ?: false,
-                onToggleLecture = { watched -> viewModel.toggleLectureWatched(watched) }
-            )
-        }
-
-        // Share Daily Report Action Card
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { showShareDialog = true }
-                    .testTag("share_daily_card"),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+            // Sleep & Rest Section
+            item {
+                SleepSection(
+                    sessions = sessions,
+                    dailySummary = dailySummary,
+                    activeSleepSession = activeSleepSession,
+                    onStartSleep = { isNight -> viewModel.startSleepSession(isNight) },
+                    onWakeUp = { id -> viewModel.stopSession(id) },
+                    onUpdateTimes = { bed, wake -> viewModel.updateBedAndWakeTimes(bed, wake) },
+                    onDeleteSession = { id -> viewModel.deleteSession(id) },
+                    isCurrentDay = true
                 )
-            ) {
-                Row(
+            }
+
+            // Book Reading Section
+            item {
+                ReadingSection(
+                    sessions = sessions,
+                    activeReadingSession = activeReadingSession,
+                    onStartReading = { viewModel.startReadingSession() },
+                    onStopReading = { id -> viewModel.stopSession(id) },
+                    onDeleteSession = { id -> viewModel.deleteSession(id) },
+                    isCurrentDay = true
+                )
+            }
+
+            // Prabhupada Lecture Section (Resets OFF daily)
+            item {
+                LectureSection(
+                    lectureWatched = dailySummary?.prabhupadaLectureWatched ?: false,
+                    onToggleLecture = { watched -> viewModel.toggleLectureWatched(watched) },
+                    isCurrentDay = true
+                )
+            }
+
+            // Strong Maya Attack Section (Resets OFF daily)
+            item {
+                MayaAttackSection(
+                    mayaAttackOccurred = dailySummary?.strongMayaAttack ?: false,
+                    onToggleMayaAttack = { attacked -> viewModel.toggleMayaAttack(attacked) },
+                    isCurrentDay = true
+                )
+            }
+
+            // Share Daily Report Action Card
+            item {
+                Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .clickable { showShareDialog = true }
+                        .testTag("share_daily_card"),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                    )
                 ) {
                     Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp)),
-                            contentAlignment = Alignment.Center
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
                         ) {
-                            Icon(Icons.Default.Share, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Share, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Share Today's Sadhana Card",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Text(
+                                    text = "Send summary with checklist to friends via WhatsApp or copy",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                )
+                            }
                         }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = "Share Today's Sadhana Card",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                            Text(
-                                text = "Send summary to friends via WhatsApp or copy",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                            )
-                        }
-                    }
 
-                    Button(
-                        onClick = { showShareDialog = true },
-                        modifier = Modifier.testTag("open_share_dialog_button"),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        ),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("Share", fontSize = 12.sp)
+                        Button(
+                            onClick = { showShareDialog = true },
+                            modifier = Modifier.testTag("open_share_dialog_button"),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            ),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("Share", fontSize = 12.sp)
+                        }
                     }
                 }
+            }
+        } else {
+            // Dedicated Past Day Summary Dashboard
+            item {
+                PastDaySummaryView(
+                    dateKey = selectedDateKey,
+                    displayDate = displayDate,
+                    sessions = sessions,
+                    dailySummary = dailySummary,
+                    checklistEntries = checklistEntries,
+                    onJumpToToday = { viewModel.jumpToToday() },
+                    onShareDay = { showShareDialog = true },
+                    onToggleLecture = { watched -> viewModel.toggleLectureWatched(watched) },
+                    onToggleMayaAttack = { attacked -> viewModel.toggleMayaAttack(attacked) },
+                    onUpdateTimes = { bed, wake -> viewModel.updateBedAndWakeTimes(bed, wake) },
+                    onToggleChecklistItem = { itemId, isCompleted -> viewModel.toggleChecklistItem(itemId, isCompleted) }
+                )
             }
         }
     }

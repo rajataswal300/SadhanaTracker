@@ -55,7 +55,8 @@ fun SleepSection(
     onStartSleep: (isNightSleep: Boolean) -> Unit,
     onWakeUp: (Long) -> Unit,
     onUpdateTimes: (bedTime: String?, wakeTime: String?) -> Unit,
-    onDeleteSession: (Long) -> Unit
+    onDeleteSession: (Long) -> Unit,
+    isCurrentDay: Boolean = true
 ) {
     val sleepSessions = sessions.filter { it.activityType == "SLEEP" }
     val totalSleepMinutes = sleepSessions.sumOf { it.durationMinutes }
@@ -230,7 +231,8 @@ fun SleepSection(
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF3F51B5)
                         ),
-                        shape = RoundedCornerShape(14.dp)
+                        shape = RoundedCornerShape(14.dp),
+                        enabled = isCurrentDay
                     ) {
                         Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(4.dp))
@@ -243,12 +245,23 @@ fun SleepSection(
                             .weight(1f)
                             .height(48.dp)
                             .testTag("start_nap_button"),
-                        shape = RoundedCornerShape(14.dp)
+                        shape = RoundedCornerShape(14.dp),
+                        enabled = isCurrentDay
                     ) {
                         Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Start Nap", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                     }
+                }
+
+                if (!isCurrentDay) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Sleep tracking is enabled on Today's date",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.sp
+                    )
                 }
             }
 

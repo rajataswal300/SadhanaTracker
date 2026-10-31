@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -49,6 +50,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.ActivitySession
+import com.example.data.model.ChecklistItem
+import com.example.data.model.DailyChecklistCompletion
+import com.example.data.model.DailySummary
+import com.example.ui.components.GoogleSheetsIntegrationCard
 import com.example.ui.components.ShareReportDialog
 import com.example.ui.components.TimerHelpers
 import com.example.ui.viewmodel.ConsolidatedReport
@@ -60,7 +66,11 @@ import com.example.ui.viewmodel.PeriodFilter
 fun ReportsScreen(
     viewModel: DailyTrackerViewModel,
     consolidatedReport: ConsolidatedReport,
-    selectedPeriod: PeriodFilter
+    selectedPeriod: PeriodFilter,
+    allSummaries: List<DailySummary> = emptyList(),
+    allSessions: List<ActivitySession> = emptyList(),
+    allChecklistItems: List<ChecklistItem> = emptyList(),
+    allCompletions: List<DailyChecklistCompletion> = emptyList()
 ) {
     var showShareDialog by remember { mutableStateOf(false) }
 
@@ -228,7 +238,26 @@ fun ReportsScreen(
                         )
                     }
                 }
+
+                // Maya Attack Summary Card
+                MetricSummaryCard(
+                    title = "Strong Maya Attack Days",
+                    mainValue = "${consolidatedReport.mayaAttackDays} of ${consolidatedReport.totalDays} days",
+                    subValue = if (consolidatedReport.mayaAttackDays == 0) "All days protected & steady" else "Chant attentively & take shelter",
+                    icon = Icons.Default.WarningAmber,
+                    accentColor = if (consolidatedReport.mayaAttackDays > 0) Color(0xFFD32F2F) else Color(0xFF2E7D32)
+                )
             }
+        }
+
+        // Google Sheets Sync & Visual Graphs Integration Card
+        item {
+            GoogleSheetsIntegrationCard(
+                allSummaries = allSummaries,
+                allSessions = allSessions,
+                allChecklistItems = allChecklistItems,
+                allCompletions = allCompletions
+            )
         }
 
         // Daily Activity Breakdown Trend
@@ -394,19 +423,32 @@ private fun DayColumnCard(item: DayReportItem) {
             )
 
             Spacer(modifier = Modifier.height(6.dp))
-            if (item.lectureWatched) {
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = "Lecture watched",
-                    tint = Color(0xFF2E7D32),
-                    modifier = Modifier.size(16.dp)
-                )
-            } else {
-                Text(
-                    text = "—",
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
-                    color = MaterialTheme.colorScheme.outline
-                )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (item.lectureWatched) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Lecture watched",
+                        tint = Color(0xFF2E7D32),
+                        modifier = Modifier.size(15.dp)
+                    )
+                } else {
+                    Text(
+                        text = "—",
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
+                if (item.strongMayaAttack) {
+                    Icon(
+                        imageVector = Icons.Default.WarningAmber,
+                        contentDescription = "Maya attack faced",
+                        tint = Color(0xFFD32F2F),
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
             }
         }
     }

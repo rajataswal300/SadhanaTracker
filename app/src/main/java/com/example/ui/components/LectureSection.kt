@@ -39,7 +39,8 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun LectureSection(
     lectureWatched: Boolean,
-    onToggleLecture: (Boolean) -> Unit
+    onToggleLecture: (Boolean) -> Unit,
+    isCurrentDay: Boolean = true
 ) {
     Card(
         modifier = Modifier
@@ -86,7 +87,7 @@ fun LectureSection(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Watched / Heard Today?",
+                            text = if (isCurrentDay) "Watched today? (Resets OFF daily)" else "Logged for this date (Editable on Today)",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -107,6 +108,7 @@ fun LectureSection(
                         checked = lectureWatched,
                         onCheckedChange = onToggleLecture,
                         modifier = Modifier.testTag("lecture_switch_toggle"),
+                        enabled = isCurrentDay,
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
                             checkedTrackColor = Color(0xFF2E7D32),

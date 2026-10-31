@@ -2,6 +2,8 @@ package com.example.data.repository
 
 import com.example.data.db.ActivityDao
 import com.example.data.model.ActivitySession
+import com.example.data.model.ChecklistItem
+import com.example.data.model.DailyChecklistCompletion
 import com.example.data.model.DailySummary
 import kotlinx.coroutines.flow.Flow
 import java.text.SimpleDateFormat
@@ -32,6 +34,46 @@ class TrackerRepository(private val dao: ActivityDao) {
 
     fun observeAllSessions(): Flow<List<ActivitySession>> =
         dao.getAllSessions()
+
+    // Checklist Observation
+    fun observeChecklistItems(): Flow<List<ChecklistItem>> =
+        dao.getAllChecklistItems()
+
+    fun observeChecklistCompletionsForDate(dateKey: String): Flow<List<DailyChecklistCompletion>> =
+        dao.getChecklistCompletionsForDate(dateKey)
+
+    fun observeAllChecklistCompletions(): Flow<List<DailyChecklistCompletion>> =
+        dao.getAllChecklistCompletions()
+
+    suspend fun seedDefaultChecklistItemsIfEmpty() {
+        // Clean up "Yoga" if present from earlier runs
+        dao.deleteChecklistItemByTitle("Yoga")
+        val count = dao.getChecklistItemsCount()
+        if (count == 0) {
+            dao.insertChecklistItem(ChecklistItem(title = "Chanting finished at morning"))
+        }
+    }
+
+    suspend fun addChecklistItem(title: String): Long {
+        if (title.isBlank()) return -1L
+        return dao.insertChecklistItem(ChecklistItem(title = title.trim()))
+    }
+
+    suspend fun deleteChecklistItem(itemId: Long) {
+        dao.deleteChecklistItem(itemId)
+        dao.deleteCompletionsForItem(itemId)
+    }
+
+    suspend fun setChecklistCompletion(dateKey: String, itemId: Long, isCompleted: Boolean) {
+        dao.upsertChecklistCompletion(
+            DailyChecklistCompletion(
+                dateKey = dateKey,
+                itemId = itemId,
+                isCompleted = isCompleted,
+                completedAtMillis = System.currentTimeMillis()
+            )
+        )
+    }
 
     suspend fun startSession(
         activityType: String,
@@ -86,6 +128,16 @@ class TrackerRepository(private val dao: ActivityDao) {
         dao.upsertDailySummary(
             existing.copy(
                 prabhupadaLectureWatched = watched,
+                updatedAtMillis = System.currentTimeMillis()
+            )
+        )
+    }
+
+    suspend fun setMayaAttack(dateKey: String, attacked: Boolean) {
+        val existing = dao.getDailySummaryOnce(dateKey) ?: DailySummary(dateKey = dateKey)
+        dao.upsertDailySummary(
+            existing.copy(
+                strongMayaAttack = attacked,
                 updatedAtMillis = System.currentTimeMillis()
             )
         )

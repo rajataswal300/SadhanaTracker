@@ -78,8 +78,13 @@ fun MainApp() {
     val activeSessions by viewModel.activeSessions.collectAsStateWithLifecycle()
     val daySessions by viewModel.currentDaySessions.collectAsStateWithLifecycle()
     val daySummary by viewModel.currentDaySummary.collectAsStateWithLifecycle()
+    val checklistEntries by viewModel.currentDayChecklistEntries.collectAsStateWithLifecycle()
     val selectedPeriod by viewModel.selectedPeriod.collectAsStateWithLifecycle()
     val consolidatedReport by viewModel.consolidatedReport.collectAsStateWithLifecycle()
+    val allSummaries by viewModel.allSummaries.collectAsStateWithLifecycle()
+    val allSessions by viewModel.allSessions.collectAsStateWithLifecycle()
+    val allChecklistItems by viewModel.allChecklistItems.collectAsStateWithLifecycle()
+    val allCompletions by viewModel.allChecklistCompletions.collectAsStateWithLifecycle()
 
     BackHandler(enabled = currentScreen != MainDestination.TODAY) {
         currentScreen = MainDestination.TODAY
@@ -159,14 +164,19 @@ fun MainApp() {
                         currentTickerTime = currentTickerTime,
                         sessions = daySessions,
                         activeSessions = activeSessions,
-                        dailySummary = daySummary
+                        dailySummary = daySummary,
+                        checklistEntries = checklistEntries
                     )
                 }
                 MainDestination.ANALYTICS -> {
                     ReportsScreen(
                         viewModel = viewModel,
                         consolidatedReport = consolidatedReport,
-                        selectedPeriod = selectedPeriod
+                        selectedPeriod = selectedPeriod,
+                        allSummaries = allSummaries,
+                        allSessions = allSessions,
+                        allChecklistItems = allChecklistItems,
+                        allCompletions = allCompletions
                     )
                 }
             }
