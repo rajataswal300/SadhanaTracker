@@ -192,9 +192,9 @@ class ExampleRobolectricTest {
         assertEquals(6.5, r.sleepHoursDecimal, 0.01)
         assertEquals(60L, r.readingMinutes)
         assertEquals(1, r.lectureNumeric)
-        assertEquals(0, r.mayaAttackNumeric)
-        assertEquals("1/1", r.checklistRatio)
-        assertEquals(100, r.checklistPercent)
+        assertEquals(1, r.customToggles.size)
+        assertEquals("Chanting finished at morning", r.customToggles[0].title)
+        assertTrue(r.customToggles[0].isCompleted)
 
         val uri = syncService.exportToCsvFile(records)
         assertNotNull(uri)
@@ -232,5 +232,44 @@ class ExampleRobolectricTest {
         vm.navigateDate(1)
         assertEquals(today, vm.selectedDateKey.value)
         assertTrue(vm.isToday())
+    }
+
+    @Test
+    fun `dynamic custom toggle title editing and daily isolation`() = runBlocking {
+        repository.seedDefaultChecklistItemsIfEmpty()
+        val items = repository.observeChecklistItems().first()
+        val chantItem = items.first { it.title == "Chanting finished at morning" }
+
+        // Edit heading
+        repository.updateChecklistItemTitle(chantItem.id, "Morning 16 Rounds Japa")
+        val updatedItems = repository.observeChecklistItems().first()
+        assertTrue(updatedItems.any { it.title == "Morning 16 Rounds Japa" })
+        assertFalse(updatedItems.any { it.title == "Chanting finished at morning" })
+    }
+
+    @Test
+    fun `section reordering and layout persistence`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefs = com.example.data.prefs.LayoutPreferences(context)
+        prefs.resetToDefault()
+
+        val vm = com.example.ui.viewmodel.DailyTrackerViewModel(repository, prefs)
+        val initialOrder = vm.sectionOrder.value
+        assertEquals(com.example.data.model.SectionType.TOGGLES, initialOrder[0])
+        assertEquals(com.example.data.model.SectionType.SLEEP, initialOrder[1])
+
+        // Move Sleep (index 1) to top (index 0)
+        vm.moveSection(1, 0)
+        val reordered = vm.sectionOrder.value
+        assertEquals(com.example.data.model.SectionType.SLEEP, reordered[0])
+        assertEquals(com.example.data.model.SectionType.TOGGLES, reordered[1])
+
+        // Verify loaded from preferences in a new ViewModel instance
+        val vm2 = com.example.ui.viewmodel.DailyTrackerViewModel(repository, prefs)
+        assertEquals(com.example.data.model.SectionType.SLEEP, vm2.sectionOrder.value[0])
+
+        // Reset restores default
+        vm2.resetSectionOrder()
+        assertEquals(com.example.data.model.SectionType.TOGGLES, vm2.sectionOrder.value[0])
     }
 }

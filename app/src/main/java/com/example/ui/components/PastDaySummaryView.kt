@@ -3,7 +3,9 @@ package com.example.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -56,6 +58,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import com.example.ui.util.rememberSadhanaHaptics
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -98,6 +101,7 @@ fun PastDaySummaryView(
 
     var showEditDialog by remember { mutableStateOf(false) }
     var showDetails by remember { mutableStateOf(false) }
+    val haptics = rememberSadhanaHaptics()
 
     Column(
         modifier = Modifier
@@ -109,6 +113,7 @@ fun PastDaySummaryView(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
             )
@@ -269,14 +274,17 @@ fun PastDaySummaryView(
             statusColor = if (mayaAttack) Color(0xFFD32F2F) else Color(0xFF2E7D32)
         )
 
-        // Completed Habits Checklist Card
+        // Daily Sadhana Toggles Card
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("past_day_checklist_card"),
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
         ) {
             Column(
                 modifier = Modifier
@@ -292,25 +300,25 @@ fun PastDaySummaryView(
                         Box(
                             modifier = Modifier
                                 .size(36.dp)
-                                .background(Color(0xFF2E7D32).copy(alpha = 0.15f), CircleShape),
+                                .background(Color(0xFF00796B).copy(alpha = 0.15f), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.CheckCircle,
                                 contentDescription = null,
-                                tint = Color(0xFF2E7D32),
+                                tint = Color(0xFF00796B),
                                 modifier = Modifier.size(20.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "Daily Routine Habits",
+                                text = "Daily Sadhana Toggles",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "${completedHabits.size} of $totalHabits habits completed",
+                                text = "${completedHabits.size} of $totalHabits toggles completed",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -340,7 +348,7 @@ fun PastDaySummaryView(
 
                 if (checklistEntries.isEmpty()) {
                     Text(
-                        text = "No checklist habits were tracked on this date.",
+                        text = "No custom toggles were tracked on this date.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -351,8 +359,13 @@ fun PastDaySummaryView(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .background(
-                                        color = if (entry.isCompleted) Color(0xFF2E7D32).copy(alpha = 0.08f)
-                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                        color = if (entry.isCompleted) MaterialTheme.colorScheme.surface
+                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .border(
+                                        width = if (entry.isCompleted) 1.5.dp else 0.5.dp,
+                                        color = if (entry.isCompleted) Color(0xFF2E7D32) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                                         shape = RoundedCornerShape(10.dp)
                                     )
                                     .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -368,8 +381,8 @@ fun PastDaySummaryView(
                                 Text(
                                     text = entry.item.title,
                                     style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = if (entry.isCompleted) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = if (entry.isCompleted) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                                    fontWeight = if (entry.isCompleted) FontWeight.Bold else FontWeight.Normal,
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
                         }
@@ -386,7 +399,10 @@ fun PastDaySummaryView(
                     .clickable { showDetails = !showDetails }
                     .testTag("session_details_card"),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                ),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -515,7 +531,10 @@ fun PastDaySummaryView(
                         }
                         Switch(
                             checked = editLecture,
-                            onCheckedChange = { editLecture = it },
+                            onCheckedChange = {
+                                haptics.toggleClick()
+                                editLecture = it
+                            },
                             colors = SwitchDefaults.colors(checkedTrackColor = Color(0xFF2E7D32))
                         )
                     }
@@ -532,36 +551,52 @@ fun PastDaySummaryView(
                         }
                         Switch(
                             checked = editMaya,
-                            onCheckedChange = { editMaya = it },
+                            onCheckedChange = {
+                                haptics.toggleClick()
+                                editMaya = it
+                            },
                             colors = SwitchDefaults.colors(checkedTrackColor = Color(0xFFD32F2F))
                         )
                     }
 
                     if (checklistEntries.isNotEmpty()) {
                         HorizontalDivider()
-                        Text("Checklist Habits for this Day:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                        Text("Custom Toggle Switches for this Day:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                         checklistEntries.forEach { entry ->
                             var checkedState by remember(entry.item.id) { mutableStateOf(entry.isCompleted) }
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable {
-                                        checkedState = !checkedState
-                                        onToggleChecklistItem(entry.item.id, checkedState)
-                                    }
                                     .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Checkbox(
-                                    checked = checkedState,
-                                    onCheckedChange = {
-                                        checkedState = it
-                                        onToggleChecklistItem(entry.item.id, it)
-                                    },
-                                    colors = CheckboxDefaults.colors(checkedColor = Color(0xFF2E7D32))
+                                Text(
+                                    text = entry.item.title,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.weight(1f)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(entry.item.title, style = MaterialTheme.typography.bodySmall)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = if (checkedState) "Yes" else "No",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (checkedState) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Switch(
+                                        checked = checkedState,
+                                        onCheckedChange = {
+                                            haptics.toggleClick()
+                                            checkedState = it
+                                            onToggleChecklistItem(entry.item.id, it)
+                                        },
+                                        colors = SwitchDefaults.colors(checkedTrackColor = Color(0xFF2E7D32))
+                                    )
+                                }
                             }
                         }
                     }
@@ -637,8 +672,11 @@ fun PastDayMetricCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
             modifier = Modifier

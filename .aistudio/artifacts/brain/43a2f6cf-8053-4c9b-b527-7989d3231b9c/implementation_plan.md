@@ -1,31 +1,42 @@
-# Disable Future Date Navigation Implementation Plan
+# Draggable Reorderable Sections Implementation Plan
 
-Prevent users from navigating into future dates by disabling and dimming the forward arrow button when on today's date, and enforcing a guard in the ViewModel.
-
----
-
-## 1. UI Navigation Updates (`DailyTrackerScreen.kt`)
-- **Forward Arrow Button (`next_date_button`)**:
-  - Bound to `enabled = !isToday`.
-  - When on today (`isToday == true`):
-    - Button click is disabled.
-    - Icon color is dimmed (`MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)`).
-  - When browsing past dates (`isToday == false`):
-    - Forward button is fully enabled with normal tint, allowing users to step forward up until today.
+Enable drag-and-drop / long-press reordering for primary tracker sections (*Daily Sadhana Toggles*, *Sleep & Rest*, *Book Reading*, *Prabhupada Lecture*, *Strong Maya Attack*, *Google Sheets*, and *Share Card*) with permanent local persistence.
 
 ---
 
-## 2. ViewModel Date Boundary Guard (`DailyTrackerViewModel.kt`)
-- In `navigateDate(daysDelta: Int)`:
-  - Add an upper boundary check against `today`:
-    - If `daysDelta > 0` and the selected date is already today or would exceed today, cap the date at today (`cal.time = minOf(targetDate, today)`).
-  - Prevents programmatic navigation into future dates.
+## 1. Section Enum & Persistent Ordering Layer
+- **Section ID Enum**:
+  - `TOGGLES` (Daily Sadhana Toggles)
+  - `SLEEP` (Sleep & Rest)
+  - `READING` (Book Reading)
+  - `LECTURE` (Prabhupada Lecture)
+  - `MAYA_ATTACK` (Strong Maya Attack)
+  - `SHEETS` (Google Sheets & Sync)
+  - `SHARE` (Share Card)
+- **`LayoutPreferences`**:
+  - Stored permanently in Android `SharedPreferences` (`sadhana_layout_prefs`) as an ordered list of keys.
+  - Automatically loads on app launch and saves immediately whenever items are reordered.
+  - Includes a "Reset to Default Layout" option.
 
 ---
 
-## 3. Verification & Testing
-- Unit test in `ExampleRobolectricTest.kt` verifying:
-  - `navigateDate(1)` from today does not advance past today.
-  - `navigateDate(-1)` from today advances to yesterday.
-  - `navigateDate(1)` from yesterday successfully advances back to today.
-- Gradle compilation and unit test execution.
+## 2. Drag & Reorder Gesture System in Compose
+- **Visual Drag Handle & Long-Press**:
+  - Add a refined Material 3 drag handle icon (`Icons.Default.DragIndicator` / `DragHandle`) in the header of each card.
+  - Long-pressing the drag handle (or holding the card) activates drag mode with haptic feedback.
+  - Supports dragging up or down with live item swapping and smooth Compose animated placement (`Modifier.animateItem()`).
+- **Accessibility & Alternate Reorder Sheet**:
+  - Provide accessible "Move Up" / "Move Down" and quick reset options via a "Reorder Layout" action in the top app bar / sheet for users who prefer tap controls over fine-motor dragging.
+
+---
+
+## 3. Screen Integration (`DailyTrackerScreen.kt` & `DailyTrackerViewModel.kt`)
+- `DailyTrackerViewModel` exposes `sectionOrder: StateFlow<List<SectionId>>`.
+- Dynamically renders each section in the user's customized sequence inside `LazyColumn`.
+- Saves reordered list to `LayoutPreferences` seamlessly.
+
+---
+
+## 4. Verification & Testing
+- Unit tests verifying layout preference persistence and reordering logic.
+- Verify smooth compilation and build.

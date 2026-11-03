@@ -3,6 +3,7 @@ package com.example.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,11 +18,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -35,13 +38,16 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.util.rememberSadhanaHaptics
 
 @Composable
 fun MayaAttackSection(
     mayaAttackOccurred: Boolean,
     onToggleMayaAttack: (Boolean) -> Unit,
-    isCurrentDay: Boolean = true
+    isCurrentDay: Boolean = true,
+    onOpenReorder: (() -> Unit)? = null
 ) {
+    val haptics = rememberSadhanaHaptics()
     val activeColor = Color(0xFFD32F2F) // Bold warning crimson
     val activeBg = Color(0xFFFFEBEE)
 
@@ -50,10 +56,11 @@ fun MayaAttackSection(
             .fillMaxWidth()
             .testTag("maya_attack_section_card"),
         shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(
             modifier = Modifier
@@ -113,7 +120,10 @@ fun MayaAttackSection(
                     )
                     Switch(
                         checked = mayaAttackOccurred,
-                        onCheckedChange = onToggleMayaAttack,
+                        onCheckedChange = {
+                            haptics.toggleClick()
+                            onToggleMayaAttack(it)
+                        },
                         modifier = Modifier.testTag("maya_attack_switch_toggle"),
                         enabled = isCurrentDay,
                         colors = SwitchDefaults.colors(
@@ -123,6 +133,22 @@ fun MayaAttackSection(
                             uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
                         )
                     )
+
+                    if (onOpenReorder != null) {
+                        IconButton(
+                            onClick = onOpenReorder,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .testTag("reorder_handle_maya_attack")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DragIndicator,
+                                contentDescription = "Rearrange Sections",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
             }
 

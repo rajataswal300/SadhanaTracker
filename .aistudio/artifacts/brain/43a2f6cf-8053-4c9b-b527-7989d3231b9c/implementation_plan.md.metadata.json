@@ -1,6 +1,6 @@
 {
-  "summary":  "Plan to disable navigating into future dates by dimming and disabling the next-day arrow button on today's date, and adding a ViewModel guard to prevent date navigation beyond today.",
-  "updatedAt":  "2026-10-31T05:04:39.369027470Z",
-  "requestFeedback":  true,
-  "userFacing":  true
+  "summary": "Plan to implement draggable/reorderable sections on DailyTrackerScreen with long-press or drag handle support, haptic feedback during reordering, and permanent persistence across app restarts.",
+  "updatedAt": "2026-11-02T14:39:17.910582689Z",
+  "requestFeedback": true,
+  "userFacing": true
 }

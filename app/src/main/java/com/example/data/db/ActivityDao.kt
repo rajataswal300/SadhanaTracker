@@ -68,6 +68,9 @@ interface ActivityDao {
     @Query("DELETE FROM checklist_items WHERE id = :itemId")
     suspend fun deleteChecklistItem(itemId: Long)
 
+    @Query("UPDATE checklist_items SET title = :newTitle WHERE id = :itemId")
+    suspend fun updateChecklistItemTitle(itemId: Long, newTitle: String)
+
     @Query("DELETE FROM checklist_items WHERE title = :title")
     suspend fun deleteChecklistItemByTitle(title: String)
 

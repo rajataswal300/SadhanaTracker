@@ -66,8 +66,9 @@ fun MainApp() {
     val context = LocalContext.current
     val database = remember { AppDatabase.getInstance(context) }
     val repository = remember { TrackerRepository(database.activityDao()) }
+    val layoutPreferences = remember { com.example.data.prefs.LayoutPreferences(context) }
     val viewModel: DailyTrackerViewModel = viewModel(
-        factory = DailyTrackerViewModel.Factory(repository)
+        factory = DailyTrackerViewModel.Factory(repository, layoutPreferences)
     )
 
     var currentScreen by remember { mutableStateOf(MainDestination.TODAY) }

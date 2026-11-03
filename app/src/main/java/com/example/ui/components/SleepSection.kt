@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.PlayArrow
@@ -46,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.ActivitySession
 import com.example.data.model.DailySummary
+import com.example.ui.util.rememberSadhanaHaptics
 
 @Composable
 fun SleepSection(
@@ -56,8 +59,10 @@ fun SleepSection(
     onWakeUp: (Long) -> Unit,
     onUpdateTimes: (bedTime: String?, wakeTime: String?) -> Unit,
     onDeleteSession: (Long) -> Unit,
-    isCurrentDay: Boolean = true
+    isCurrentDay: Boolean = true,
+    onOpenReorder: (() -> Unit)? = null
 ) {
+    val haptics = rememberSadhanaHaptics()
     val sleepSessions = sessions.filter { it.activityType == "SLEEP" }
     val totalSleepMinutes = sleepSessions.sumOf { it.durationMinutes }
 
@@ -68,10 +73,11 @@ fun SleepSection(
             .fillMaxWidth()
             .testTag("sleep_section_card"),
         shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(
             modifier = Modifier
@@ -113,21 +119,39 @@ fun SleepSection(
                     }
                 }
 
-                // Total Sleep Badge
-                Box(
-                    modifier = Modifier
-                        .background(
-                            color = Color(0xFF3F51B5).copy(alpha = 0.12f),
-                            shape = RoundedCornerShape(12.dp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                color = Color(0xFF3F51B5).copy(alpha = 0.12f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = TimerHelpers.formatMinutes(totalSleepMinutes),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFF3F51B5)
                         )
-                        .padding(horizontal = 14.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = TimerHelpers.formatMinutes(totalSleepMinutes),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF3F51B5)
-                    )
+                    }
+
+                    if (onOpenReorder != null) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        IconButton(
+                            onClick = onOpenReorder,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .testTag("reorder_handle_sleep")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DragIndicator,
+                                contentDescription = "Rearrange Sections",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
             }
 
@@ -199,22 +223,27 @@ fun SleepSection(
             // Action Buttons (Single tap start / wake)
             if (activeSleepSession != null) {
                 Button(
-                    onClick = { onWakeUp(activeSleepSession.id) },
+                    onClick = {
+                        haptics.timerAction()
+                        onWakeUp(activeSleepSession.id)
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp)
                         .testTag("wake_up_button"),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF1A237E)
+                        containerColor = Color(0xFF1A237E),
+                        contentColor = Color.White
                     ),
                     shape = RoundedCornerShape(14.dp)
                 ) {
-                    Icon(Icons.Default.WbSunny, contentDescription = null)
+                    Icon(Icons.Default.WbSunny, contentDescription = null, tint = Color.White)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "Waking Up (End Sleep)",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
+                        fontSize = 15.sp,
+                        color = Color.White
                     )
                 }
             } else {
@@ -223,34 +252,65 @@ fun SleepSection(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Button(
-                        onClick = { onStartSleep(true) },
+                        onClick = {
+                            haptics.timerAction()
+                            onStartSleep(true)
+                        },
                         modifier = Modifier
                             .weight(1f)
                             .height(48.dp)
                             .testTag("start_night_sleep_button"),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF3F51B5)
+                            containerColor = Color(0xFF3F51B5),
+                            contentColor = Color.White,
+                            disabledContainerColor = Color(0xFF3F51B5).copy(alpha = 0.38f),
+                            disabledContentColor = Color.White.copy(alpha = 0.5f)
                         ),
                         shape = RoundedCornerShape(14.dp),
                         enabled = isCurrentDay
                     ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Start Night Sleep", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                        Text(
+                            text = "Start Night Sleep",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = Color.White
+                        )
                     }
 
                     FilledTonalButton(
-                        onClick = { onStartSleep(false) },
+                        onClick = {
+                            haptics.timerAction()
+                            onStartSleep(false)
+                        },
                         modifier = Modifier
                             .weight(1f)
                             .height(48.dp)
                             .testTag("start_nap_button"),
                         shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        ),
                         enabled = isCurrentDay
                     ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Start Nap", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                        Text(
+                            text = "Start Nap",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
                     }
                 }
 

@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.ActivitySession
+import com.example.ui.util.rememberSadhanaHaptics
 
 @Composable
 fun ActiveSessionBanner(
@@ -43,6 +44,7 @@ fun ActiveSessionBanner(
     currentTickerTime: Long,
     onStopSession: (Long) -> Unit
 ) {
+    val haptics = rememberSadhanaHaptics()
     AnimatedVisibility(
         visible = activeSessions.isNotEmpty(),
         enter = fadeIn(),
@@ -119,7 +121,10 @@ fun ActiveSessionBanner(
                         }
 
                         Button(
-                            onClick = { onStopSession(session.id) },
+                            onClick = {
+                                haptics.timerAction()
+                                onStopSession(session.id)
+                            },
                             modifier = Modifier
                                 .testTag("stop_session_button_${session.id}"),
                             colors = ButtonDefaults.buttonColors(

@@ -8,6 +8,8 @@ import com.example.data.model.ChecklistEntry
 import com.example.data.model.ChecklistItem
 import com.example.data.model.DailyChecklistCompletion
 import com.example.data.model.DailySummary
+import com.example.data.model.SectionType
+import com.example.data.prefs.LayoutPreferences
 import com.example.data.repository.TrackerRepository
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,11 +54,39 @@ data class ConsolidatedReport(
     val dailyItems: List<DayReportItem>
 )
 
-class DailyTrackerViewModel(private val repository: TrackerRepository) : ViewModel() {
+class DailyTrackerViewModel(
+    private val repository: TrackerRepository,
+    private val layoutPreferences: LayoutPreferences? = null
+) : ViewModel() {
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     private val displayDateFormat = SimpleDateFormat("EEE, MMM d, yyyy", Locale.getDefault())
     private val dayOfWeekFormat = SimpleDateFormat("EEE", Locale.getDefault())
+
+    private val _sectionOrder = MutableStateFlow(
+        layoutPreferences?.getSectionOrder() ?: SectionType.DEFAULT_ORDER
+    )
+    val sectionOrder: StateFlow<List<SectionType>> = _sectionOrder.asStateFlow()
+
+    fun moveSection(fromIndex: Int, toIndex: Int) {
+        val current = _sectionOrder.value.toMutableList()
+        if (fromIndex in current.indices && toIndex in current.indices && fromIndex != toIndex) {
+            val item = current.removeAt(fromIndex)
+            current.add(toIndex, item)
+            _sectionOrder.value = current
+            layoutPreferences?.saveSectionOrder(current)
+        }
+    }
+
+    fun setSectionOrder(newOrder: List<SectionType>) {
+        _sectionOrder.value = newOrder
+        layoutPreferences?.saveSectionOrder(newOrder)
+    }
+
+    fun resetSectionOrder() {
+        val defaultList = layoutPreferences?.resetToDefault() ?: SectionType.DEFAULT_ORDER
+        _sectionOrder.value = defaultList
+    }
 
     private val _selectedDateKey = MutableStateFlow(dateFormat.format(Date()))
     val selectedDateKey: StateFlow<String> = _selectedDateKey.asStateFlow()
@@ -239,6 +269,12 @@ class DailyTrackerViewModel(private val repository: TrackerRepository) : ViewMod
     fun deleteChecklistItem(itemId: Long) {
         viewModelScope.launch {
             repository.deleteChecklistItem(itemId)
+        }
+    }
+
+    fun updateChecklistItemTitle(itemId: Long, newTitle: String) {
+        viewModelScope.launch {
+            repository.updateChecklistItemTitle(itemId, newTitle)
         }
     }
 
@@ -426,10 +462,13 @@ class DailyTrackerViewModel(private val repository: TrackerRepository) : ViewMod
         }
     }
 
-    class Factory(private val repository: TrackerRepository) : ViewModelProvider.Factory {
+    class Factory(
+        private val repository: TrackerRepository,
+        private val layoutPreferences: LayoutPreferences? = null
+    ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return DailyTrackerViewModel(repository) as T
+            return DailyTrackerViewModel(repository, layoutPreferences) as T
         }
     }
 }

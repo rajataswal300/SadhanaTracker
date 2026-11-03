@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -99,10 +100,11 @@ fun GoogleSheetsIntegrationCard(
             .fillMaxWidth()
             .testTag("google_sheets_card"),
         shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(
             modifier = Modifier
@@ -411,7 +413,14 @@ fun GoogleSheetsIntegrationCard(
                     )
 
                     Text(
-                        text = "💡 Your sheet will automatically build 2 tabs: 'Daily Data' and 'Visual Dashboard' with combo line/bar charts for sleep vs. reading, consistency charts, and KPI formulas!",
+                        text = "🔒 Strict Unique Dates: Each row in 'Daily Data' is guaranteed to be a unique date. Syncing updates existing rows in place without creating duplicate rows.",
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                        color = Color(0xFF1B5E20),
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    Text(
+                        text = "💡 Your sheet will automatically maintain 2 tabs: 'Daily Data' and 'Visual Dashboard' with combo line/bar charts for sleep vs. reading, consistency charts, and KPI formulas!",
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

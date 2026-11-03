@@ -63,7 +63,14 @@ android {
     compose = true
     buildConfig = true
   }
-  testOptions { unitTests { isIncludeAndroidResources = true } }
+  testOptions {
+    unitTests {
+      isIncludeAndroidResources = true
+      all {
+        it.systemProperty("user.home", "/home/appuser")
+      }
+    }
+  }
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true

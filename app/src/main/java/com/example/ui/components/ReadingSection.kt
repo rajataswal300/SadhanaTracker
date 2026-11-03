@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
@@ -35,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.ActivitySession
+import com.example.ui.util.rememberSadhanaHaptics
 
 @Composable
 fun ReadingSection(
@@ -43,8 +46,10 @@ fun ReadingSection(
     onStartReading: () -> Unit,
     onStopReading: (Long) -> Unit,
     onDeleteSession: (Long) -> Unit,
-    isCurrentDay: Boolean = true
+    isCurrentDay: Boolean = true,
+    onOpenReorder: (() -> Unit)? = null
 ) {
+    val haptics = rememberSadhanaHaptics()
     val readingSessions = sessions.filter { it.activityType == "READING" }
     val totalReadingMinutes = readingSessions.sumOf { it.durationMinutes }
 
@@ -53,10 +58,11 @@ fun ReadingSection(
             .fillMaxWidth()
             .testTag("reading_section_card"),
         shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(
             modifier = Modifier
@@ -98,21 +104,39 @@ fun ReadingSection(
                     }
                 }
 
-                // Total Reading Badge
-                Box(
-                    modifier = Modifier
-                        .background(
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                            shape = RoundedCornerShape(12.dp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = TimerHelpers.formatMinutes(totalReadingMinutes),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.primary
                         )
-                        .padding(horizontal = 14.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = TimerHelpers.formatMinutes(totalReadingMinutes),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    }
+
+                    if (onOpenReorder != null) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        IconButton(
+                            onClick = onOpenReorder,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .testTag("reorder_handle_reading")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DragIndicator,
+                                contentDescription = "Rearrange Sections",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
             }
 
@@ -121,7 +145,10 @@ fun ReadingSection(
             // Action Button (Start / Stop)
             if (activeReadingSession != null) {
                 Button(
-                    onClick = { onStopReading(activeReadingSession.id) },
+                    onClick = {
+                        haptics.timerAction()
+                        onStopReading(activeReadingSession.id)
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp)
@@ -141,7 +168,10 @@ fun ReadingSection(
                 }
             } else {
                 Button(
-                    onClick = onStartReading,
+                    onClick = {
+                        haptics.timerAction()
+                        onStartReading()
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp)

@@ -59,6 +59,12 @@ class TrackerRepository(private val dao: ActivityDao) {
         return dao.insertChecklistItem(ChecklistItem(title = title.trim()))
     }
 
+    suspend fun updateChecklistItemTitle(itemId: Long, newTitle: String) {
+        if (newTitle.isNotBlank()) {
+            dao.updateChecklistItemTitle(itemId, newTitle.trim())
+        }
+    }
+
     suspend fun deleteChecklistItem(itemId: Long) {
         dao.deleteChecklistItem(itemId)
         dao.deleteCompletionsForItem(itemId)
