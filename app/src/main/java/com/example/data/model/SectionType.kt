@@ -3,6 +3,7 @@ package com.example.data.model
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Security
@@ -40,6 +41,11 @@ enum class SectionType(
         description = "Illusion attack logging & reflection",
         icon = Icons.Default.Security
     ),
+    NOTES(
+        title = "Notes & Learnings",
+        description = "Daily spiritual realizations & notes",
+        icon = Icons.Default.EditNote
+    ),
     SHEETS(
         title = "Google Sheets & Sync",
         description = "Cloud sheet sync & web app connection",
@@ -58,6 +64,7 @@ enum class SectionType(
             READING,
             LECTURE,
             MAYA_ATTACK,
+            NOTES,
             SHEETS,
             SHARE
         )

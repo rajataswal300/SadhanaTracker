@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.ActivitySession
+import com.example.data.model.BookEntity
+import com.example.data.model.BookStatus
 import com.example.data.model.ChecklistEntry
 import com.example.data.model.ChecklistItem
 import com.example.data.model.DailyChecklistCompletion
@@ -17,7 +19,10 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -103,6 +108,11 @@ class DailyTrackerViewModel(
             repository.seedDefaultChecklistItemsIfEmpty()
         }
 
+        // Seed initial canonical books if library is empty
+        viewModelScope.launch {
+            repository.seedDefaultBooksIfEmpty()
+        }
+
         // Ticker coroutine updating current time every second for live timer display
         viewModelScope.launch {
             while (isActive) {
@@ -110,6 +120,27 @@ class DailyTrackerViewModel(
                 delay(1000L)
             }
         }
+
+        // Auto carry-forward notes from previous day if Today's note is empty
+        viewModelScope.launch {
+            delay(400L)
+            checkAndApplyCarryForwardIfEmpty()
+        }
+    }
+
+    // Book Library Streams
+    val allBooks: StateFlow<List<BookEntity>> = repository.observeAllBooks()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val currentlyReadingBooks: StateFlow<List<BookEntity>> = allBooks
+        .map { books -> books.filter { it.status == BookStatus.READING } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _selectedBookForSession = MutableStateFlow<BookEntity?>(null)
+    val selectedBookForSession: StateFlow<BookEntity?> = _selectedBookForSession.asStateFlow()
+
+    fun selectBookForSession(book: BookEntity?) {
+        _selectedBookForSession.value = book
     }
 
     val activeSessions: StateFlow<List<ActivitySession>> = repository.observeActiveSessions()
@@ -128,6 +159,17 @@ class DailyTrackerViewModel(
 
     val allSummaries: StateFlow<List<DailySummary>> = repository.observeAllSummaries()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allSummariesWithNotes: StateFlow<List<DailySummary>> = repository.observeAllSummariesWithNotes()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val latestPreviousNotesCandidate: StateFlow<Pair<String, String>?> = _selectedDateKey
+        .flatMapLatest { dateKey ->
+            flow {
+                emit(repository.getLatestPreviousNotes(dateKey))
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // Checklist streams
     val allChecklistItems: StateFlow<List<ChecklistItem>> = repository.observeChecklistItems()
@@ -223,9 +265,64 @@ class DailyTrackerViewModel(
         }
     }
 
-    fun startReadingSession() {
+    fun startReadingSession(book: BookEntity? = _selectedBookForSession.value) {
         viewModelScope.launch {
-            repository.startSession("READING", "READING", _selectedDateKey.value)
+            repository.startSession(
+                activityType = "READING",
+                subType = "READING",
+                dateKey = _selectedDateKey.value,
+                bookId = book?.id,
+                bookTitle = book?.title
+            )
+        }
+    }
+
+    // Book Management Actions
+    fun addBook(title: String, author: String = "") {
+        viewModelScope.launch {
+            repository.addBook(title, author)
+        }
+    }
+
+    fun updateBookTitle(id: Long, newTitle: String) {
+        viewModelScope.launch {
+            repository.updateBookTitle(id, newTitle)
+        }
+    }
+
+    fun markBookAsReading(id: Long) {
+        viewModelScope.launch {
+            repository.markBookAsReading(id)
+        }
+    }
+
+    fun markBookAsCompleted(id: Long) {
+        viewModelScope.launch {
+            repository.markBookAsCompleted(id)
+            if (_selectedBookForSession.value?.id == id) {
+                _selectedBookForSession.value = null
+            }
+        }
+    }
+
+    fun rereadBook(id: Long) {
+        viewModelScope.launch {
+            repository.rereadBook(id)
+        }
+    }
+
+    fun incrementBookCompletion(id: Long) {
+        viewModelScope.launch {
+            repository.incrementBookCompletion(id)
+        }
+    }
+
+    fun deleteBook(id: Long) {
+        viewModelScope.launch {
+            repository.deleteBook(id)
+            if (_selectedBookForSession.value?.id == id) {
+                _selectedBookForSession.value = null
+            }
         }
     }
 
@@ -257,6 +354,29 @@ class DailyTrackerViewModel(
         viewModelScope.launch {
             repository.deleteSession(sessionId)
         }
+    }
+
+    fun updateDailyNotes(notes: String, dateKey: String = _selectedDateKey.value) {
+        viewModelScope.launch {
+            repository.updateDailyNotes(dateKey, notes)
+        }
+    }
+
+    fun checkAndApplyCarryForwardIfEmpty(targetDateKey: String = dateFormat.format(Date())) {
+        viewModelScope.launch {
+            val candidate = repository.getLatestPreviousNotes(targetDateKey)
+            if (candidate != null && candidate.second.isNotBlank()) {
+                val current = repository.observeDailySummary(targetDateKey).first()
+                if (current == null || current.notes.isBlank()) {
+                    repository.updateDailyNotes(targetDateKey, candidate.second)
+                }
+            }
+        }
+    }
+
+    fun applyCarryForwardManually() {
+        val candidate = latestPreviousNotesCandidate.value ?: return
+        updateDailyNotes(candidate.second)
     }
 
     // Checklist Operations
@@ -423,6 +543,12 @@ class DailyTrackerViewModel(
                     val statusMark = if (entry.isCompleted) "✅" else "⬜"
                     appendLine("   $statusMark ${entry.item.title}")
                 }
+            }
+
+            if (!summary?.notes.isNullOrBlank()) {
+                appendLine("━━━━━━━━━━━━━━━━━━━━━━━━━")
+                appendLine("📝 Notes & Learnings:")
+                appendLine(summary?.notes?.trim())
             }
 
             appendLine("━━━━━━━━━━━━━━━━━━━━━━━━━")

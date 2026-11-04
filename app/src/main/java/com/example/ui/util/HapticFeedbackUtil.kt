@@ -63,6 +63,22 @@ class SadhanaHaptics(
             // Ignore if vibration fails or is disabled
         }
     }
+
+    fun buttonClick() {
+        toggleClick()
+    }
+
+    fun itemAdded() {
+        toggleClick()
+    }
+
+    fun celebration() {
+        timerAction()
+    }
+
+    fun counterTick() {
+        toggleClick()
+    }
 }
 
 @Composable

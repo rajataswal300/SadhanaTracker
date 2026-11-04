@@ -13,10 +13,30 @@ data class ActivitySession(
     val startTimeMillis: Long = System.currentTimeMillis(),
     val endTimeMillis: Long? = null,
     val durationMinutes: Long = 0,
-    val note: String = ""
+    val note: String = "",
+    val bookId: Long? = null,
+    val bookTitle: String? = null
 ) {
     val isRunning: Boolean get() = endTimeMillis == null
 }
+
+enum class BookStatus {
+    NOT_READ,    // Initial state: Pending / To Read
+    READING,     // Currently Reading (one or more books simultaneously)
+    COMPLETED    // Finished at least once (completionCount >= 1)
+}
+
+@Entity(tableName = "books")
+data class BookEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val title: String,
+    val author: String = "",
+    val status: BookStatus = BookStatus.NOT_READ,
+    val completionCount: Int = 0,
+    val createdAtMillis: Long = System.currentTimeMillis(),
+    val lastReadTimestamp: Long? = null
+)
 
 @Entity(tableName = "daily_summaries")
 data class DailySummary(

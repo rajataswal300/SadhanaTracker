@@ -361,7 +361,7 @@ fun GoogleSheetsIntegrationCard(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "Any user can connect their own private Google Sheet with automated graphs in 3 simple steps:",
+                        text = "Any user can connect their own private Google Sheet in 3 simple steps. The script automatically manages 'Daily Data', 'Learnings & Notes', and 'Visual Dashboard' tabs:",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

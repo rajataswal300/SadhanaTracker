@@ -5,6 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.example.data.model.ActivitySession
+import com.example.data.model.BookEntity
 import com.example.data.model.ChecklistItem
 import com.example.data.model.DailyChecklistCompletion
 import com.example.data.model.DailySummary
@@ -14,13 +15,15 @@ import com.example.data.model.DailySummary
         ActivitySession::class,
         DailySummary::class,
         ChecklistItem::class,
-        DailyChecklistCompletion::class
+        DailyChecklistCompletion::class,
+        BookEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun activityDao(): ActivityDao
+    abstract fun bookDao(): BookDao
 
     companion object {
         @Volatile

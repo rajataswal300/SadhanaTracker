@@ -52,6 +52,12 @@ interface ActivityDao {
     @Query("SELECT * FROM daily_summaries ORDER BY dateKey ASC")
     fun getAllDailySummaries(): Flow<List<DailySummary>>
 
+    @Query("SELECT * FROM daily_summaries WHERE dateKey < :dateKey AND notes != '' ORDER BY dateKey DESC LIMIT 1")
+    suspend fun getLatestPreviousSummaryWithNotes(dateKey: String): DailySummary?
+
+    @Query("SELECT * FROM daily_summaries WHERE notes != '' ORDER BY dateKey DESC")
+    fun getAllSummariesWithNotes(): Flow<List<DailySummary>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertDailySummary(summary: DailySummary)
 

@@ -5,6 +5,8 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.db.AppDatabase
 import com.example.data.model.ActivitySession
+import com.example.data.model.BookEntity
+import com.example.data.model.BookStatus
 import com.example.data.model.DailySummary
 import com.example.data.repository.TrackerRepository
 import com.example.ui.components.TimerHelpers
@@ -34,7 +36,7 @@ class ExampleRobolectricTest {
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
             .allowMainThreadQueries()
             .build()
-        repository = TrackerRepository(db.activityDao())
+        repository = TrackerRepository(db.activityDao(), db.bookDao())
     }
 
     @After
@@ -271,5 +273,110 @@ class ExampleRobolectricTest {
         // Reset restores default
         vm2.resetSectionOrder()
         assertEquals(com.example.data.model.SectionType.TOGGLES, vm2.sectionOrder.value[0])
+    }
+
+    @Test
+    fun `notes carry forward from previous day and google sheets export`() = runBlocking {
+        // Save note on day 1
+        repository.updateDailyNotes("2026-11-01", "Chanted with full attention. Read Gita chapter 3.")
+
+        // Check carry forward lookup for day 2
+        val candidate = repository.getLatestPreviousNotes("2026-11-02")
+        assertNotNull(candidate)
+        assertEquals("2026-11-01", candidate!!.first)
+        assertEquals("Chanted with full attention. Read Gita chapter 3.", candidate.second)
+
+        // Verify carry-forward applied to day 2
+        repository.updateDailyNotes("2026-11-02", candidate.second)
+
+        val day2Summary = repository.observeDailySummary("2026-11-02").first()
+        assertNotNull(day2Summary)
+        assertEquals("Chanted with full attention. Read Gita chapter 3.", day2Summary!!.notes)
+
+        // Test building Google Sheets notes export records
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val allSummaries = repository.observeAllSummaries().first()
+        val syncService = com.example.data.sheets.GoogleSheetsSyncService(context)
+        val exportRecords = syncService.buildNotesExportRecords(allSummaries)
+        assertTrue(exportRecords.isNotEmpty())
+        assertEquals("2026-11-01", exportRecords[0].dateKey)
+        assertEquals("Chanted with full attention. Read Gita chapter 3.", exportRecords[0].notes)
+    }
+
+    @Test
+    fun `book library lifecycle - add, mark reading, finish increment count and re-read`() = runBlocking {
+        // Seed default books
+        repository.seedDefaultBooksIfEmpty()
+        val initialBooks = repository.observeAllBooks().first()
+        assertTrue("Expected seeded books", initialBooks.isNotEmpty())
+
+        // Add a custom book
+        val bookId = repository.addBook("Isopanisad", "A.C. Bhaktivedanta Swami")
+        assertTrue(bookId > 0)
+
+        val allBooks = repository.observeAllBooks().first()
+        val addedBook = allBooks.find { it.id == bookId }
+        assertNotNull(addedBook)
+        assertEquals("Isopanisad", addedBook!!.title)
+        assertEquals(BookStatus.NOT_READ, addedBook.status)
+        assertEquals(0, addedBook.completionCount)
+
+        // Mark as currently reading
+        repository.markBookAsReading(bookId)
+        val readingBooks = repository.observeBooksByStatus(BookStatus.READING).first()
+        assertTrue(readingBooks.any { it.id == bookId })
+
+        // Start a reading session tagged with this book
+        val sessionId = repository.startSession(
+            activityType = "READING",
+            subType = "READING",
+            dateKey = "2026-11-04",
+            bookId = bookId,
+            bookTitle = addedBook.title
+        )
+        assertTrue(sessionId > 0)
+
+        val activeSessions = repository.observeActiveSessions().first()
+        val activeReading = activeSessions.find { it.id == sessionId }
+        assertNotNull(activeReading)
+        assertEquals("Isopanisad", activeReading!!.bookTitle)
+        assertEquals(bookId, activeReading.bookId)
+
+        // Stop the session
+        repository.stopSession(sessionId, activeReading.startTimeMillis + 30 * 60 * 1000)
+
+        // Mark book as completed (1st finish)
+        repository.markBookAsCompleted(bookId)
+        val completedBooks = repository.observeBooksByStatus(BookStatus.COMPLETED).first()
+        val completedBook = completedBooks.find { it.id == bookId }
+        assertNotNull(completedBook)
+        assertEquals(BookStatus.COMPLETED, completedBook!!.status)
+        assertEquals(1, completedBook.completionCount)
+
+        // User decides to re-read the book
+        repository.rereadBook(bookId)
+        val rereadBooks = repository.observeBooksByStatus(BookStatus.READING).first()
+        val readingAgain = rereadBooks.find { it.id == bookId }
+        assertNotNull(readingAgain)
+        assertEquals(BookStatus.READING, readingAgain!!.status)
+        assertEquals(1, readingAgain.completionCount) // Count preserved!
+
+        // Finish re-reading (2nd finish)
+        repository.markBookAsCompleted(bookId)
+        val secondFinish = repository.observeAllBooks().first().find { it.id == bookId }
+        assertNotNull(secondFinish)
+        assertEquals(BookStatus.COMPLETED, secondFinish!!.status)
+        assertEquals(2, secondFinish.completionCount)
+
+        // Edit book title
+        repository.updateBookTitle(bookId, "Sri Isopanisad (Full)")
+        val editedBook = repository.observeAllBooks().first().find { it.id == bookId }
+        assertNotNull(editedBook)
+        assertEquals("Sri Isopanisad (Full)", editedBook!!.title)
+
+        // Delete book
+        repository.deleteBook(bookId)
+        val booksAfterDelete = repository.observeAllBooks().first()
+        assertTrue(booksAfterDelete.none { it.id == bookId })
     }
 }

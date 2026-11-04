@@ -64,7 +64,7 @@ fun ActiveSessionBanner(
                 val bannerTitle = if (isSleep) {
                     if (session.subType == "NAP") "Daytime Nap in Progress" else "Sleeping in Progress"
                 } else {
-                    "Book Reading in Progress"
+                    if (!session.bookTitle.isNullOrBlank()) "Reading: ${session.bookTitle}" else "Book Reading in Progress"
                 }
 
                 val stopButtonLabel = if (isSleep) "Wake Up" else "Finish Reading"

@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Headphones
@@ -45,6 +46,7 @@ import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -85,7 +87,8 @@ fun PastDaySummaryView(
     onToggleLecture: (Boolean) -> Unit,
     onToggleMayaAttack: (Boolean) -> Unit,
     onUpdateTimes: (bedTime: String?, wakeTime: String?) -> Unit,
-    onToggleChecklistItem: (itemId: Long, isCompleted: Boolean) -> Unit
+    onToggleChecklistItem: (itemId: Long, isCompleted: Boolean) -> Unit,
+    onUpdateNotes: ((String) -> Unit)? = null
 ) {
     val sleepSessions = sessions.filter { it.activityType == "SLEEP" }
     val readingSessions = sessions.filter { it.activityType == "READING" }
@@ -391,6 +394,79 @@ fun PastDaySummaryView(
             }
         }
 
+        // Past Day Learnings & Notes Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("past_day_notes_card"),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(Color(0xFF2E7D32).copy(alpha = 0.15f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.EditNote,
+                                contentDescription = null,
+                                tint = Color(0xFF2E7D32),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Learnings & Notes",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    if (onUpdateNotes != null) {
+                        IconButton(
+                            onClick = { showEditDialog = true },
+                            modifier = Modifier.size(32.dp).testTag("edit_past_notes_icon")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit Notes",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (!dailySummary?.notes.isNullOrBlank()) {
+                    Text(
+                        text = dailySummary!!.notes,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                } else {
+                    Text(
+                        text = "No realizations recorded for this day. Tap edit to add.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+            }
+        }
+
         // Expandable Detailed Sessions Breakdown
         if (sessions.isNotEmpty()) {
             Card(
@@ -443,7 +519,11 @@ fun PastDaySummaryView(
                                 ) {
                                     Column {
                                         Text(
-                                            text = if (s.activityType == "SLEEP") "Sleep: ${s.subType}" else "Reading",
+                                            text = if (s.activityType == "SLEEP") {
+                                                "Sleep: ${s.subType}"
+                                            } else {
+                                                if (!s.bookTitle.isNullOrBlank()) "Reading: ${s.bookTitle}" else "Reading"
+                                            },
                                             fontWeight = FontWeight.SemiBold,
                                             style = MaterialTheme.typography.bodySmall
                                         )
@@ -473,6 +553,7 @@ fun PastDaySummaryView(
     if (showEditDialog) {
         var editBedTime by remember { mutableStateOf(dailySummary?.bedTimePreviousNight ?: "") }
         var editWakeTime by remember { mutableStateOf(dailySummary?.wakeUpTime ?: "") }
+        var editNotes by remember { mutableStateOf(dailySummary?.notes ?: "") }
         var editLecture by remember { mutableStateOf(lectureWatched) }
         var editMaya by remember { mutableStateOf(mayaAttack) }
 
@@ -600,6 +681,19 @@ fun PastDaySummaryView(
                             }
                         }
                     }
+
+                    HorizontalDivider()
+
+                    // Learnings & Notes input
+                    OutlinedTextField(
+                        value = editNotes,
+                        onValueChange = { editNotes = it },
+                        label = { Text("Learnings & Realizations") },
+                        placeholder = { Text("Write what you learned on this day...") },
+                        modifier = Modifier.fillMaxWidth().testTag("edit_past_notes_input"),
+                        minLines = 3,
+                        maxLines = 6
+                    )
                 }
             },
             confirmButton = {
@@ -611,6 +705,7 @@ fun PastDaySummaryView(
                         )
                         onToggleLecture(editLecture)
                         onToggleMayaAttack(editMaya)
+                        onUpdateNotes?.invoke(editNotes)
                         showEditDialog = false
                     },
                     modifier = Modifier.testTag("save_past_day_edit_button")

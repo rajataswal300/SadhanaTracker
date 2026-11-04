@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -39,7 +40,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -54,8 +57,11 @@ import com.example.data.model.DailySummary
 import com.example.data.model.SectionType
 import com.example.ui.components.ActiveSessionBanner
 import com.example.ui.components.DynamicToggleSection
+import com.example.ui.components.BookLibrarySheet
 import com.example.ui.components.LectureSection
+import com.example.ui.components.LearningsHistorySheet
 import com.example.ui.components.MayaAttackSection
+import com.example.ui.components.NotesAndLearningsCard
 import com.example.ui.components.PastDaySummaryView
 import com.example.ui.components.ReadingSection
 import com.example.ui.components.ReorderSectionsSheet
@@ -76,16 +82,35 @@ fun DailyTrackerScreen(
 ) {
     var showShareDialog by remember { mutableStateOf(false) }
     var showReorderSheet by remember { mutableStateOf(false) }
+    var showLearningsHistory by remember { mutableStateOf(false) }
+    var showBookLibrarySheet by remember { mutableStateOf(false) }
     val reorderSheetState = rememberModalBottomSheetState()
+    val historySheetState = rememberModalBottomSheetState()
+    val bookLibrarySheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val sectionOrder by viewModel.sectionOrder.collectAsStateWithLifecycle()
+    val allSummariesWithNotes by viewModel.allSummariesWithNotes.collectAsStateWithLifecycle()
+    val carryForwardCandidate by viewModel.latestPreviousNotesCandidate.collectAsStateWithLifecycle()
+    val books by viewModel.allBooks.collectAsStateWithLifecycle()
+    val currentlyReadingBooks by viewModel.currentlyReadingBooks.collectAsStateWithLifecycle()
+    val selectedBookForSession by viewModel.selectedBookForSession.collectAsStateWithLifecycle()
 
     val activeSleepSession = activeSessions.find { it.activityType == "SLEEP" }
     val activeReadingSession = activeSessions.find { it.activityType == "READING" }
     val isToday = viewModel.isToday(selectedDateKey)
     val displayDate = viewModel.formatDisplayDate(selectedDateKey)
 
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+
+    val scrollToTopOfScreen = {
+        coroutineScope.launch {
+            listState.animateScrollToItem(index = 0)
+        }
+    }
+
     LazyColumn(
+        state = listState,
         modifier = Modifier
             .fillMaxSize()
             .testTag("daily_tracker_screen"),
@@ -208,7 +233,10 @@ fun DailyTrackerScreen(
                             sessions = sessions,
                             dailySummary = dailySummary,
                             activeSleepSession = activeSleepSession,
-                            onStartSleep = { isNight -> viewModel.startSleepSession(isNight) },
+                            onStartSleep = { isNight ->
+                                viewModel.startSleepSession(isNight)
+                                scrollToTopOfScreen()
+                            },
                             onWakeUp = { id -> viewModel.stopSession(id) },
                             onUpdateTimes = { bed, wake -> viewModel.updateBedAndWakeTimes(bed, wake) },
                             onDeleteSession = { id -> viewModel.deleteSession(id) },
@@ -218,7 +246,15 @@ fun DailyTrackerScreen(
                         SectionType.READING -> ReadingSection(
                             sessions = sessions,
                             activeReadingSession = activeReadingSession,
-                            onStartReading = { viewModel.startReadingSession() },
+                            books = books,
+                            currentlyReadingBooks = currentlyReadingBooks,
+                            selectedBookForSession = selectedBookForSession,
+                            onSelectBookForSession = { book -> viewModel.selectBookForSession(book) },
+                            onOpenBookLibrary = { showBookLibrarySheet = true },
+                            onStartReading = {
+                                viewModel.startReadingSession()
+                                scrollToTopOfScreen()
+                            },
                             onStopReading = { id -> viewModel.stopSession(id) },
                             onDeleteSession = { id -> viewModel.deleteSession(id) },
                             isCurrentDay = true,
@@ -233,6 +269,15 @@ fun DailyTrackerScreen(
                         SectionType.MAYA_ATTACK -> MayaAttackSection(
                             mayaAttackOccurred = dailySummary?.strongMayaAttack ?: false,
                             onToggleMayaAttack = { attacked -> viewModel.toggleMayaAttack(attacked) },
+                            isCurrentDay = true,
+                            onOpenReorder = { showReorderSheet = true }
+                        )
+                        SectionType.NOTES -> NotesAndLearningsCard(
+                            currentNotes = dailySummary?.notes ?: "",
+                            allSummariesWithNotes = allSummariesWithNotes,
+                            previousNotesCandidate = carryForwardCandidate,
+                            onSaveNotes = { notes -> viewModel.updateDailyNotes(notes) },
+                            onOpenHistory = { showLearningsHistory = true },
                             isCurrentDay = true,
                             onOpenReorder = { showReorderSheet = true }
                         )
@@ -329,7 +374,8 @@ fun DailyTrackerScreen(
                     onToggleLecture = { watched -> viewModel.toggleLectureWatched(watched) },
                     onToggleMayaAttack = { attacked -> viewModel.toggleMayaAttack(attacked) },
                     onUpdateTimes = { bed, wake -> viewModel.updateBedAndWakeTimes(bed, wake) },
-                    onToggleChecklistItem = { itemId, isCompleted -> viewModel.toggleChecklistItem(itemId, isCompleted) }
+                    onToggleChecklistItem = { itemId, isCompleted -> viewModel.toggleChecklistItem(itemId, isCompleted) },
+                    onUpdateNotes = { notes -> viewModel.updateDailyNotes(notes, selectedDateKey) }
                 )
             }
         }
@@ -351,6 +397,34 @@ fun DailyTrackerScreen(
             onMoveSection = { from, to -> viewModel.moveSection(from, to) },
             onResetOrder = { viewModel.resetSectionOrder() },
             onDismiss = { showReorderSheet = false }
+        )
+    }
+
+    if (showLearningsHistory) {
+        LearningsHistorySheet(
+            sheetState = historySheetState,
+            allSummariesWithNotes = allSummariesWithNotes,
+            onSaveNotesForDate = { dateKey, notes -> viewModel.updateDailyNotes(notes, dateKey) },
+            onDismiss = { showLearningsHistory = false }
+        )
+    }
+
+    if (showBookLibrarySheet) {
+        BookLibrarySheet(
+            sheetState = bookLibrarySheetState,
+            books = books,
+            onDismiss = { showBookLibrarySheet = false },
+            onAddBook = { title, author -> viewModel.addBook(title, author) },
+            onUpdateTitle = { id, title -> viewModel.updateBookTitle(id, title) },
+            onMarkAsReading = { id -> viewModel.markBookAsReading(id) },
+            onMarkAsCompleted = { id -> viewModel.markBookAsCompleted(id) },
+            onRereadBook = { id -> viewModel.rereadBook(id) },
+            onIncrementCompletion = { id -> viewModel.incrementBookCompletion(id) },
+            onDeleteBook = { id -> viewModel.deleteBook(id) },
+            onSelectBookForActiveSession = { book ->
+                viewModel.selectBookForSession(book)
+                showBookLibrarySheet = false
+            }
         )
     }
 }

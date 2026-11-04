@@ -44,6 +44,13 @@ data class DailyExportRecord(
     val customToggles: List<CustomToggleExport>
 )
 
+data class NoteExportRecord(
+    val dateKey: String,
+    val dayOfWeek: String,
+    val notes: String,
+    val lastUpdated: String
+)
+
 sealed class SheetsSyncResult {
     data class Success(val message: String, val rowsSynced: Int) : SheetsSyncResult()
     data class Error(val errorMessage: String) : SheetsSyncResult()
@@ -243,6 +250,77 @@ class GoogleSheetsSyncService(private val context: Context) {
             }
         }
 
+    fun buildNotesExportRecords(allSummaries: List<DailySummary>): List<NoteExportRecord> {
+        val dayFormat = SimpleDateFormat("EEEE", Locale.getDefault())
+        val parseFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val updateFormat = SimpleDateFormat("MMM d, yyyy h:mm a", Locale.getDefault())
+
+        return allSummaries
+            .filter { it.notes.isNotBlank() }
+            .sortedBy { it.dateKey }
+            .map { s ->
+                val dayName = try {
+                    val parsed = parseFormat.parse(s.dateKey)
+                    if (parsed != null) dayFormat.format(parsed) else ""
+                } catch (e: Exception) {
+                    ""
+                }
+                val updateStr = updateFormat.format(Date(s.updatedAtMillis))
+                NoteExportRecord(
+                    dateKey = s.dateKey,
+                    dayOfWeek = dayName,
+                    notes = s.notes,
+                    lastUpdated = updateStr
+                )
+            }
+    }
+
+    suspend fun syncNotesToWebhook(webhookUrl: String, notes: List<NoteExportRecord>): SheetsSyncResult =
+        withContext(Dispatchers.IO) {
+            if (webhookUrl.isBlank() || !webhookUrl.startsWith("http")) {
+                return@withContext SheetsSyncResult.Error("Please enter a valid Google Apps Script Web App URL")
+            }
+
+            try {
+                val jsonArray = JSONArray()
+                notes.forEach { n ->
+                    val obj = JSONObject().apply {
+                        put("dateKey", n.dateKey)
+                        put("dayOfWeek", n.dayOfWeek)
+                        put("notes", n.notes)
+                        put("lastUpdated", n.lastUpdated)
+                    }
+                    jsonArray.put(obj)
+                }
+
+                val payload = JSONObject().apply {
+                    put("action", "sync_notes")
+                    put("notesRecords", jsonArray)
+                    put("syncDate", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()))
+                }
+
+                val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+                val request = Request.Builder()
+                    .url(webhookUrl)
+                    .post(body)
+                    .build()
+
+                httpClient.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        setLastSyncTimestamp(System.currentTimeMillis())
+                        SheetsSyncResult.Success(
+                            message = "Synced ${notes.size} note${if (notes.size == 1) "" else "s"} date-wise to 'Learnings & Notes' tab!",
+                            rowsSynced = notes.size
+                        )
+                    } else {
+                        SheetsSyncResult.Error("Sync failed: HTTP ${response.code}")
+                    }
+                }
+            } catch (e: Exception) {
+                SheetsSyncResult.Error(e.message ?: "Network error connecting to Google Sheets Web App")
+            }
+        }
+
     companion object {
         const val APPS_SCRIPT_TEMPLATE = """
 // ─── DAILY SADHANA GOOGLE APPS SCRIPT TEMPLATE (CLEAN SINGLE COLUMNS & UNIQUE DATES) ───
@@ -260,6 +338,74 @@ function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // A. Handle Dedicated 'sync_notes' Action (Writes to 'Learnings & Notes' tab)
+    if (data.action === "sync_notes" || data.notesRecords) {
+      var notesSheet = ss.getSheetByName("Learnings & Notes");
+      if (!notesSheet) {
+        notesSheet = ss.insertSheet("Learnings & Notes");
+      }
+      
+      var notesHeaders = ["Date", "Day", "Learnings & Notes", "Last Updated"];
+      var uniqueNotesMap = {};
+      var nLastRow = notesSheet.getLastRow();
+      var nLastCol = notesSheet.getLastColumn();
+      
+      if (nLastRow > 1 && nLastCol >= 3) {
+        var nOldVals = notesSheet.getRange(2, 1, nLastRow - 1, nLastCol).getValues();
+        var nOldDisplay = notesSheet.getRange(2, 1, nLastRow - 1, 1).getDisplayValues();
+        for (var ni = 0; ni < nOldVals.length; ni++) {
+          var nDate = normalizeDate(nOldDisplay[ni][0] || nOldVals[ni][0]);
+          if (nDate) {
+            uniqueNotesMap[nDate] = nOldVals[ni];
+          }
+        }
+      }
+      
+      var notesRecords = data.notesRecords || [];
+      for (var nj = 0; nj < notesRecords.length; nj++) {
+        var nr = notesRecords[nj];
+        var nKey = normalizeDate(nr.dateKey);
+        if (!nKey) continue;
+        uniqueNotesMap[nKey] = [
+          nKey,
+          nr.dayOfWeek || "",
+          nr.notes || "",
+          nr.lastUpdated || ""
+        ];
+      }
+      
+      var sortedNoteDates = Object.keys(uniqueNotesMap).sort();
+      var cleanNoteRows = [];
+      for (var sn = 0; sn < sortedNoteDates.length; sn++) {
+        cleanNoteRows.push(uniqueNotesMap[sortedNoteDates[sn]]);
+      }
+      
+      notesSheet.clear();
+      notesSheet.getRange(1, 1, 1, notesHeaders.length).setValues([notesHeaders]);
+      notesSheet.getRange(1, 1, 1, notesHeaders.length)
+        .setBackground("#1B5E20")
+        .setFontColor("#FFFFFF")
+        .setFontWeight("bold");
+      notesSheet.setFrozenRows(1);
+      notesSheet.getRange("A:A").setNumberFormat("@");
+      
+      if (cleanNoteRows.length > 0) {
+        notesSheet.getRange(2, 1, cleanNoteRows.length, notesHeaders.length).setValues(cleanNoteRows);
+      }
+      
+      notesSheet.autoResizeColumns(1, notesHeaders.length);
+      notesSheet.setColumnWidth(3, 450);
+      notesSheet.getRange("C:C").setWrap(true);
+      
+      if (data.action === "sync_notes") {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "success",
+          tab: "Learnings & Notes",
+          syncedNotes: cleanNoteRows.length
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
     
     // 1. Setup or get 'Daily Data' sheet
     var dataSheet = ss.getSheetByName("Daily Data");

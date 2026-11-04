@@ -1,7 +1,10 @@
 package com.example.data.repository
 
 import com.example.data.db.ActivityDao
+import com.example.data.db.BookDao
 import com.example.data.model.ActivitySession
+import com.example.data.model.BookEntity
+import com.example.data.model.BookStatus
 import com.example.data.model.ChecklistItem
 import com.example.data.model.DailyChecklistCompletion
 import com.example.data.model.DailySummary
@@ -10,7 +13,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class TrackerRepository(private val dao: ActivityDao) {
+class TrackerRepository(
+    private val dao: ActivityDao,
+    private val bookDao: BookDao
+) {
 
     private val timeFormat = SimpleDateFormat("hh:mm a", Locale.getDefault())
 
@@ -85,7 +91,9 @@ class TrackerRepository(private val dao: ActivityDao) {
         activityType: String,
         subType: String,
         dateKey: String,
-        note: String = ""
+        note: String = "",
+        bookId: Long? = null,
+        bookTitle: String? = null
     ): Long {
         val now = System.currentTimeMillis()
         val session = ActivitySession(
@@ -95,9 +103,19 @@ class TrackerRepository(private val dao: ActivityDao) {
             startTimeMillis = now,
             endTimeMillis = null,
             durationMinutes = 0,
-            note = note
+            note = note,
+            bookId = bookId,
+            bookTitle = bookTitle
         )
         val id = dao.insertSession(session)
+
+        // If this reading session is tagged with a book, ensure lastReadTimestamp is updated
+        if (activityType == "READING" && bookId != null) {
+            val book = bookDao.getBookById(bookId)
+            if (book != null && book.status == BookStatus.NOT_READ) {
+                bookDao.updateBookStatus(bookId, BookStatus.READING, now)
+            }
+        }
 
         // If this is night sleep starting, also record bedTimePreviousNight
         if (activityType == "SLEEP" && subType == "NIGHT_SLEEP") {
@@ -162,5 +180,93 @@ class TrackerRepository(private val dao: ActivityDao) {
 
     suspend fun deleteSession(sessionId: Long) {
         dao.deleteSessionById(sessionId)
+    }
+
+    suspend fun getLatestPreviousNotes(beforeDateKey: String): Pair<String, String>? {
+        val prevSummary = dao.getLatestPreviousSummaryWithNotes(beforeDateKey)
+        return if (prevSummary != null && prevSummary.notes.isNotBlank()) {
+            Pair(prevSummary.dateKey, prevSummary.notes)
+        } else {
+            null
+        }
+    }
+
+    suspend fun updateDailyNotes(dateKey: String, notes: String) {
+        val existing = dao.getDailySummaryOnce(dateKey) ?: DailySummary(dateKey = dateKey)
+        dao.upsertDailySummary(
+            existing.copy(
+                notes = notes,
+                updatedAtMillis = System.currentTimeMillis()
+            )
+        )
+    }
+
+    fun observeAllSummariesWithNotes(): Flow<List<DailySummary>> =
+        dao.getAllSummariesWithNotes()
+
+    // Book Library Operations
+    fun observeAllBooks(): Flow<List<BookEntity>> =
+        bookDao.getAllBooks()
+
+    fun observeBooksByStatus(status: BookStatus): Flow<List<BookEntity>> =
+        bookDao.getBooksByStatus(status)
+
+    suspend fun seedDefaultBooksIfEmpty() {
+        val count = bookDao.getBooksCount()
+        if (count == 0) {
+            val defaultBooks = listOf(
+                BookEntity(title = "Bhagavad Gita As It Is", author = "A.C. Bhaktivedanta Swami Prabhupada", status = BookStatus.READING),
+                BookEntity(title = "Srimad Bhagavatam - Canto 1", author = "A.C. Bhaktivedanta Swami Prabhupada", status = BookStatus.NOT_READ),
+                BookEntity(title = "The Science of Self-Realization", author = "A.C. Bhaktivedanta Swami Prabhupada", status = BookStatus.NOT_READ),
+                BookEntity(title = "Nectar of Devotion", author = "A.C. Bhaktivedanta Swami Prabhupada", status = BookStatus.NOT_READ)
+            )
+            for (b in defaultBooks) {
+                bookDao.insertBook(b)
+            }
+        }
+    }
+
+    suspend fun addBook(title: String, author: String = ""): Long {
+        if (title.isBlank()) return -1L
+        return bookDao.insertBook(
+            BookEntity(
+                title = title.trim(),
+                author = author.trim(),
+                status = BookStatus.NOT_READ,
+                completionCount = 0
+            )
+        )
+    }
+
+    suspend fun updateBookTitle(id: Long, newTitle: String) {
+        if (newTitle.isNotBlank()) {
+            bookDao.updateBookTitle(id, newTitle.trim())
+        }
+    }
+
+    suspend fun updateBookStatus(id: Long, status: BookStatus) {
+        bookDao.updateBookStatus(id, status, System.currentTimeMillis())
+    }
+
+    suspend fun markBookAsReading(id: Long) {
+        bookDao.updateBookStatus(id, BookStatus.READING, System.currentTimeMillis())
+    }
+
+    suspend fun markBookAsCompleted(id: Long) {
+        // Increments completionCount by 1 and marks status as COMPLETED
+        bookDao.markBookCompleted(id, BookStatus.COMPLETED, System.currentTimeMillis())
+    }
+
+    suspend fun rereadBook(id: Long) {
+        // Moves back to READING while preserving completionCount
+        bookDao.updateBookStatus(id, BookStatus.READING, System.currentTimeMillis())
+    }
+
+    suspend fun incrementBookCompletion(id: Long) {
+        bookDao.incrementCompletionCount(id, System.currentTimeMillis())
+    }
+
+    suspend fun deleteBook(id: Long) {
+        bookDao.deleteBookById(id)
     }
 }

@@ -65,7 +65,7 @@ class MainActivity : ComponentActivity() {
 fun MainApp() {
     val context = LocalContext.current
     val database = remember { AppDatabase.getInstance(context) }
-    val repository = remember { TrackerRepository(database.activityDao()) }
+    val repository = remember { TrackerRepository(database.activityDao(), database.bookDao()) }
     val layoutPreferences = remember { com.example.data.prefs.LayoutPreferences(context) }
     val viewModel: DailyTrackerViewModel = viewModel(
         factory = DailyTrackerViewModel.Factory(repository, layoutPreferences)
