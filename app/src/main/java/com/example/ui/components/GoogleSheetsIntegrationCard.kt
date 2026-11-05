@@ -65,6 +65,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.ActivitySession
+import com.example.data.model.BookEntity
 import com.example.data.model.ChecklistItem
 import com.example.data.model.DailyChecklistCompletion
 import com.example.data.model.DailySummary
@@ -80,7 +81,8 @@ fun GoogleSheetsIntegrationCard(
     allSummaries: List<DailySummary>,
     allSessions: List<ActivitySession>,
     allChecklistItems: List<ChecklistItem>,
-    allCompletions: List<DailyChecklistCompletion>
+    allCompletions: List<DailyChecklistCompletion>,
+    allBooks: List<BookEntity> = emptyList()
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -247,7 +249,14 @@ fun GoogleSheetsIntegrationCard(
                                 val records = syncService.buildDailyExportRecords(
                                     allSummaries, allSessions, allChecklistItems, allCompletions
                                 )
-                                val result = syncService.syncToWebhook(webhookUrl, records)
+                                val noteRecords = syncService.buildNotesExportRecords(allSummaries)
+                                val bookRecords = syncService.buildBookExportRecords(allBooks)
+                                val result = syncService.syncToWebhook(
+                                    webhookUrl = webhookUrl,
+                                    records = records,
+                                    notesRecords = noteRecords,
+                                    bookRecords = bookRecords
+                                )
                                 isSyncing = false
                                 when (result) {
                                     is SheetsSyncResult.Success -> {
@@ -361,7 +370,7 @@ fun GoogleSheetsIntegrationCard(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "Any user can connect their own private Google Sheet in 3 simple steps. The script automatically manages 'Daily Data', 'Learnings & Notes', and 'Visual Dashboard' tabs:",
+                        text = "Any user can connect their own private Google Sheet in 3 simple steps. The script automatically manages 'Daily Data', 'Learnings & Notes', 'Book Library', and 'Visual Dashboard' tabs:",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

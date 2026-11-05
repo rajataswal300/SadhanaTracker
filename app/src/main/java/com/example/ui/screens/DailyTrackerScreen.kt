@@ -414,7 +414,7 @@ fun DailyTrackerScreen(
             sheetState = bookLibrarySheetState,
             books = books,
             onDismiss = { showBookLibrarySheet = false },
-            onAddBook = { title, author -> viewModel.addBook(title, author) },
+            onAddBook = { title -> viewModel.addBook(title) },
             onUpdateTitle = { id, title -> viewModel.updateBookTitle(id, title) },
             onMarkAsReading = { id -> viewModel.markBookAsReading(id) },
             onMarkAsCompleted = { id -> viewModel.markBookAsCompleted(id) },

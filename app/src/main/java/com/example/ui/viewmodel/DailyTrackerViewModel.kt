@@ -1,8 +1,11 @@
 package com.example.ui.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.data.auth.AuthManager
+import com.example.data.firestore.SyncStatus
 import com.example.data.model.ActivitySession
 import com.example.data.model.BookEntity
 import com.example.data.model.BookStatus
@@ -13,6 +16,7 @@ import com.example.data.model.DailySummary
 import com.example.data.model.SectionType
 import com.example.data.prefs.LayoutPreferences
 import com.example.data.repository.TrackerRepository
+import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -61,8 +65,49 @@ data class ConsolidatedReport(
 
 class DailyTrackerViewModel(
     private val repository: TrackerRepository,
-    private val layoutPreferences: LayoutPreferences? = null
+    private val layoutPreferences: LayoutPreferences? = null,
+    private val authManager: AuthManager? = null
 ) : ViewModel() {
+
+    val currentUser: StateFlow<FirebaseUser?> = authManager?.currentUser
+        ?: MutableStateFlow(null)
+
+    val syncStatus: StateFlow<SyncStatus> = repository.firestoreSync?.syncStatus
+        ?: MutableStateFlow(SyncStatus.IDLE)
+
+    val lastSyncTimeMillis: StateFlow<Long?> = repository.firestoreSync?.lastSyncTimeMillis
+        ?: MutableStateFlow(null)
+
+    fun signInWithGoogle(activityContext: Context, onResult: (Boolean, String?) -> Unit) {
+        viewModelScope.launch {
+            if (authManager == null) {
+                onResult(false, "Authentication manager not initialized")
+                return@launch
+            }
+            val result = authManager.signInWithGoogle(activityContext)
+            result.fold(
+                onSuccess = { user ->
+                    onResult(true, null)
+                },
+                onFailure = { error ->
+                    onResult(false, error.message ?: "Sign-in failed")
+                }
+            )
+        }
+    }
+
+    fun signOut() {
+        viewModelScope.launch {
+            authManager?.signOut()
+        }
+    }
+
+    fun triggerManualSync() {
+        viewModelScope.launch {
+            val user = currentUser.value ?: return@launch
+            repository.firestoreSync?.manualSyncNow(user.uid)
+        }
+    }
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     private val displayDateFormat = SimpleDateFormat("EEE, MMM d, yyyy", Locale.getDefault())
@@ -125,6 +170,17 @@ class DailyTrackerViewModel(
         viewModelScope.launch {
             delay(400L)
             checkAndApplyCarryForwardIfEmpty()
+        }
+
+        // Real-time Firestore cloud sync when logged in
+        viewModelScope.launch {
+            currentUser.collect { user ->
+                if (user != null) {
+                    repository.firestoreSync?.startSync(user.uid, viewModelScope)
+                } else {
+                    repository.firestoreSync?.stopSync()
+                }
+            }
         }
     }
 
@@ -278,9 +334,9 @@ class DailyTrackerViewModel(
     }
 
     // Book Management Actions
-    fun addBook(title: String, author: String = "") {
+    fun addBook(title: String) {
         viewModelScope.launch {
-            repository.addBook(title, author)
+            repository.addBook(title)
         }
     }
 
@@ -590,11 +646,12 @@ class DailyTrackerViewModel(
 
     class Factory(
         private val repository: TrackerRepository,
-        private val layoutPreferences: LayoutPreferences? = null
+        private val layoutPreferences: LayoutPreferences? = null,
+        private val authManager: AuthManager? = null
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return DailyTrackerViewModel(repository, layoutPreferences) as T
+            return DailyTrackerViewModel(repository, layoutPreferences, authManager) as T
         }
     }
 }

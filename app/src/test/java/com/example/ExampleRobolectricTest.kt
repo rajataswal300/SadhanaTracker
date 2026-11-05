@@ -311,7 +311,7 @@ class ExampleRobolectricTest {
         assertTrue("Expected seeded books", initialBooks.isNotEmpty())
 
         // Add a custom book
-        val bookId = repository.addBook("Isopanisad", "A.C. Bhaktivedanta Swami")
+        val bookId = repository.addBook("Isopanisad")
         assertTrue(bookId > 0)
 
         val allBooks = repository.observeAllBooks().first()
@@ -378,5 +378,35 @@ class ExampleRobolectricTest {
         repository.deleteBook(bookId)
         val booksAfterDelete = repository.observeAllBooks().first()
         assertTrue(booksAfterDelete.none { it.id == bookId })
+    }
+
+    @Test
+    fun `buildBookExportRecords transforms books for Google Sheets Book Library tab`() = runBlocking {
+        repository.seedDefaultBooksIfEmpty()
+        val bookId = repository.addBook("Bhagavad Gita")
+        repository.markBookAsReading(bookId)
+        repository.markBookAsCompleted(bookId)
+
+        val allBooks = repository.observeAllBooks().first()
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val syncService = com.example.data.sheets.GoogleSheetsSyncService(context)
+
+        val exportRecords = syncService.buildBookExportRecords(allBooks)
+        assertTrue("Expected non-empty book export records", exportRecords.isNotEmpty())
+
+        val gitaRecord = exportRecords.find { it.id == bookId }
+        assertNotNull(gitaRecord)
+        assertEquals("Bhagavad Gita", gitaRecord!!.title)
+        assertEquals("Completed", gitaRecord.status)
+        assertEquals(1, gitaRecord.completionCount)
+        assertTrue(gitaRecord.dateAddedFormatted.isNotBlank())
+        assertTrue(gitaRecord.lastReadFormatted != "Not started yet")
+    }
+
+    @Test
+    fun `launch MainActivity directly`() {
+        val scenario = androidx.test.core.app.ActivityScenario.launch(MainActivity::class.java)
+        assertNotNull(scenario)
+        scenario.close()
     }
 }

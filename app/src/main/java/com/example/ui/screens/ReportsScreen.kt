@@ -51,6 +51,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.ActivitySession
+import com.example.data.model.BookEntity
 import com.example.data.model.ChecklistItem
 import com.example.data.model.DailyChecklistCompletion
 import com.example.data.model.DailySummary
@@ -70,7 +71,8 @@ fun ReportsScreen(
     allSummaries: List<DailySummary> = emptyList(),
     allSessions: List<ActivitySession> = emptyList(),
     allChecklistItems: List<ChecklistItem> = emptyList(),
-    allCompletions: List<DailyChecklistCompletion> = emptyList()
+    allCompletions: List<DailyChecklistCompletion> = emptyList(),
+    allBooks: List<BookEntity> = emptyList()
 ) {
     var showShareDialog by remember { mutableStateOf(false) }
 
@@ -256,7 +258,8 @@ fun ReportsScreen(
                 allSummaries = allSummaries,
                 allSessions = allSessions,
                 allChecklistItems = allChecklistItems,
-                allCompletions = allCompletions
+                allCompletions = allCompletions,
+                allBooks = allBooks
             )
         }
 

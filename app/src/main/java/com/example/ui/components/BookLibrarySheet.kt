@@ -84,7 +84,7 @@ fun BookLibrarySheet(
     sheetState: SheetState,
     books: List<BookEntity>,
     onDismiss: () -> Unit,
-    onAddBook: (String, String) -> Unit,
+    onAddBook: (String) -> Unit,
     onUpdateTitle: (Long, String) -> Unit,
     onMarkAsReading: (Long) -> Unit,
     onMarkAsCompleted: (Long) -> Unit,
@@ -115,8 +115,7 @@ fun BookLibrarySheet(
             BookFilterTab.COMPLETED -> book.status == BookStatus.COMPLETED
         }
         val matchesSearch = searchQuery.isBlank() ||
-                book.title.contains(searchQuery, ignoreCase = true) ||
-                book.author.contains(searchQuery, ignoreCase = true)
+                book.title.contains(searchQuery, ignoreCase = true)
 
         matchesTab && matchesSearch
     }
@@ -212,7 +211,7 @@ fun BookLibrarySheet(
                             onDone = {
                                 if (newBookTitle.isNotBlank()) {
                                     haptics.itemAdded()
-                                    onAddBook(newBookTitle.trim(), "")
+                                    onAddBook(newBookTitle.trim())
                                     newBookTitle = ""
                                 }
                             }
@@ -225,7 +224,7 @@ fun BookLibrarySheet(
                         onClick = {
                             if (newBookTitle.isNotBlank()) {
                                 haptics.itemAdded()
-                                onAddBook(newBookTitle.trim(), "")
+                                onAddBook(newBookTitle.trim())
                                 newBookTitle = ""
                             }
                         },
@@ -513,13 +512,6 @@ fun BookItemCard(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    if (book.author.isNotBlank()) {
-                        Text(
-                            text = book.author,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {

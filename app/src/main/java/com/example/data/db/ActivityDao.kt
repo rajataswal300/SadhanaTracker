@@ -80,6 +80,30 @@ interface ActivityDao {
     @Query("DELETE FROM checklist_items WHERE title = :title")
     suspend fun deleteChecklistItemByTitle(title: String)
 
+    @Query("SELECT * FROM activity_sessions")
+    suspend fun getAllSessionsOnce(): List<ActivitySession>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertSessions(sessions: List<ActivitySession>)
+
+    @Query("SELECT * FROM daily_summaries")
+    suspend fun getAllDailySummariesOnce(): List<DailySummary>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertDailySummaries(summaries: List<DailySummary>)
+
+    @Query("SELECT * FROM checklist_items")
+    suspend fun getAllChecklistItemsOnce(): List<ChecklistItem>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertChecklistItems(items: List<ChecklistItem>)
+
+    @Query("SELECT * FROM daily_checklist_completions")
+    suspend fun getAllChecklistCompletionsOnce(): List<DailyChecklistCompletion>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertChecklistCompletions(completions: List<DailyChecklistCompletion>)
+
     // Checklist Completions per Date
     @Query("SELECT * FROM daily_checklist_completions WHERE dateKey = :dateKey")
     fun getChecklistCompletionsForDate(dateKey: String): Flow<List<DailyChecklistCompletion>>

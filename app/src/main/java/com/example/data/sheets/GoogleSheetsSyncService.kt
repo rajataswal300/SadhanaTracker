@@ -5,6 +5,8 @@ import android.content.Intent
 import android.net.Uri
 import androidx.core.content.FileProvider
 import com.example.data.model.ActivitySession
+import com.example.data.model.BookEntity
+import com.example.data.model.BookStatus
 import com.example.data.model.ChecklistItem
 import com.example.data.model.DailyChecklistCompletion
 import com.example.data.model.DailySummary
@@ -49,6 +51,15 @@ data class NoteExportRecord(
     val dayOfWeek: String,
     val notes: String,
     val lastUpdated: String
+)
+
+data class BookExportRecord(
+    val id: Long,
+    val title: String,
+    val status: String,
+    val completionCount: Int,
+    val lastReadFormatted: String,
+    val dateAddedFormatted: String
 )
 
 sealed class SheetsSyncResult {
@@ -190,7 +201,12 @@ class GoogleSheetsSyncService(private val context: Context) {
         }
     }
 
-    suspend fun syncToWebhook(webhookUrl: String, records: List<DailyExportRecord>): SheetsSyncResult =
+    suspend fun syncToWebhook(
+        webhookUrl: String,
+        records: List<DailyExportRecord>,
+        notesRecords: List<NoteExportRecord> = emptyList(),
+        bookRecords: List<BookExportRecord> = emptyList()
+    ): SheetsSyncResult =
         withContext(Dispatchers.IO) {
             if (webhookUrl.isBlank() || !webhookUrl.startsWith("http")) {
                 return@withContext SheetsSyncResult.Error("Please enter a valid Google Apps Script Web App URL")
@@ -221,10 +237,37 @@ class GoogleSheetsSyncService(private val context: Context) {
                     jsonArray.put(obj)
                 }
 
+                val notesJsonArray = JSONArray()
+                notesRecords.forEach { nr ->
+                    notesJsonArray.put(JSONObject().apply {
+                        put("dateKey", nr.dateKey)
+                        put("dayOfWeek", nr.dayOfWeek)
+                        put("notes", nr.notes)
+                        put("lastUpdated", nr.lastUpdated)
+                    })
+                }
+
+                val booksJsonArray = JSONArray()
+                bookRecords.forEach { br ->
+                    booksJsonArray.put(JSONObject().apply {
+                        put("title", br.title)
+                        put("status", br.status)
+                        put("completionCount", br.completionCount)
+                        put("lastRead", br.lastReadFormatted)
+                        put("dateAdded", br.dateAddedFormatted)
+                    })
+                }
+
                 val payload = JSONObject().apply {
                     put("action", "sync_sadhana")
                     put("customHeaders", customHeadersJson)
                     put("records", jsonArray)
+                    if (notesJsonArray.length() > 0) {
+                        put("notesRecords", notesJsonArray)
+                    }
+                    if (booksJsonArray.length() > 0) {
+                        put("bookRecords", booksJsonArray)
+                    }
                     put("syncDate", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()))
                 }
 
@@ -237,9 +280,15 @@ class GoogleSheetsSyncService(private val context: Context) {
                 httpClient.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
                         setLastSyncTimestamp(System.currentTimeMillis())
+                        val summaryParts = mutableListOf<String>()
+                        if (records.isNotEmpty()) summaryParts.add("${records.size} days")
+                        if (notesRecords.isNotEmpty()) summaryParts.add("${notesRecords.size} notes")
+                        if (bookRecords.isNotEmpty()) summaryParts.add("${bookRecords.size} books")
+                        val summaryText = if (summaryParts.isNotEmpty()) summaryParts.joinToString(", ") else "${records.size} records"
+
                         SheetsSyncResult.Success(
-                            message = "Synced ${records.size} unique days! Clean single-column layout updated.",
-                            rowsSynced = records.size
+                            message = "Synced $summaryText to Google Sheets!",
+                            rowsSynced = records.size + notesRecords.size + bookRecords.size
                         )
                     } else {
                         SheetsSyncResult.Error("Sync failed: HTTP ${response.code}")
@@ -249,6 +298,34 @@ class GoogleSheetsSyncService(private val context: Context) {
                 SheetsSyncResult.Error(e.message ?: "Network error connecting to Google Sheets Web App")
             }
         }
+
+    fun buildBookExportRecords(allBooks: List<BookEntity>): List<BookExportRecord> {
+        val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+        val dateTimeFormat = SimpleDateFormat("MMM d, yyyy h:mm a", Locale.getDefault())
+
+        return allBooks.map { book ->
+            val statusLabel = when (book.status) {
+                BookStatus.READING -> "Currently Reading"
+                BookStatus.COMPLETED -> "Completed"
+                BookStatus.NOT_READ -> "To Read"
+            }
+            val lastReadStr = if (book.lastReadTimestamp != null && book.lastReadTimestamp > 0) {
+                dateTimeFormat.format(Date(book.lastReadTimestamp))
+            } else {
+                "Not started yet"
+            }
+            val dateAddedStr = dateFormat.format(Date(book.createdAtMillis))
+
+            BookExportRecord(
+                id = book.id,
+                title = book.title,
+                status = statusLabel,
+                completionCount = book.completionCount,
+                lastReadFormatted = lastReadStr,
+                dateAddedFormatted = dateAddedStr
+            )
+        }
+    }
 
     fun buildNotesExportRecords(allSummaries: List<DailySummary>): List<NoteExportRecord> {
         val dayFormat = SimpleDateFormat("EEEE", Locale.getDefault())
@@ -405,6 +482,45 @@ function doPost(e) {
           syncedNotes: cleanNoteRows.length
         })).setMimeType(ContentService.MimeType.JSON);
       }
+    }
+    
+    // B. Handle 'Book Library' Tab Sync
+    if (data.bookRecords && data.bookRecords.length > 0) {
+      var bookSheet = ss.getSheetByName("Book Library");
+      if (!bookSheet) {
+        bookSheet = ss.insertSheet("Book Library");
+      }
+      
+      var bookHeaders = ["Book Title", "Status", "Times Read", "Last Read Date", "Date Added"];
+      var bRecords = data.bookRecords;
+      var bookRows = [];
+      
+      for (var bi = 0; bi < bRecords.length; bi++) {
+        var b = bRecords[bi];
+        bookRows.push([
+          b.title || "",
+          b.status || "",
+          b.completionCount || 0,
+          b.lastRead || "",
+          b.dateAdded || ""
+        ]);
+      }
+      
+      bookSheet.clear();
+      bookSheet.getRange(1, 1, 1, bookHeaders.length).setValues([bookHeaders]);
+      bookSheet.getRange(1, 1, 1, bookHeaders.length)
+        .setBackground("#1A237E")
+        .setFontColor("#FFFFFF")
+        .setFontWeight("bold");
+      bookSheet.setFrozenRows(1);
+      
+      if (bookRows.length > 0) {
+        bookSheet.getRange(2, 1, bookRows.length, bookHeaders.length).setValues(bookRows);
+      }
+      
+      bookSheet.autoResizeColumns(1, bookHeaders.length);
+      bookSheet.setColumnWidth(1, 320);
+      bookSheet.getRange("A:A").setWrap(true);
     }
     
     // 1. Setup or get 'Daily Data' sheet

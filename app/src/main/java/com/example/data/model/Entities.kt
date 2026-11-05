@@ -31,7 +31,6 @@ data class BookEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
     val title: String,
-    val author: String = "",
     val status: BookStatus = BookStatus.NOT_READ,
     val completionCount: Int = 0,
     val createdAtMillis: Long = System.currentTimeMillis(),
